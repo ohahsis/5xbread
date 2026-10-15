@@ -9,7 +9,7 @@
 - 정의서와 decisions.md가 다르면 decisions.md가 우선
 
 ## 스택
-Java 21, Spring Boot 4.x, Gradle(Kotlin DSL), MySQL 8, Redis 7, Flyway,
+Java 21, Spring Boot 3.5.16, Gradle 8.14(Kotlin DSL), MySQL 8, Redis 7, Flyway,
 Spring Security + JWT, STOMP WebSocket, Testcontainers
 
 ## 명령어
