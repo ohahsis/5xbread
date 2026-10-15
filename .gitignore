@@ -1,0 +1,30 @@
+### IDE ###
+.idea/
+*.iml
+out/
+
+### macOS ###
+.DS_Store
+
+### Gradle / Java ###
+.gradle/
+build/
+*.class
+*.log
+*.jar
+!gradle-wrapper.jar
+
+### Env / Secrets ###
+.env
+
+### Local data (빵 사진 등) ###
+data/
+
+### Frontend (나중에) ###
+node_modules/
+dist/
+
+### Claude Code 개인 설정 ###
+.claude/settings.local.json
+
+docs/private

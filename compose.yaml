@@ -1,0 +1,30 @@
+# compose.yaml (레포 루트)
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: fivexbread
+      MYSQL_USER: fivexbread
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+09:00
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  mysql-data: {}
+  redis-data: {}

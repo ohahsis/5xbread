@@ -1,0 +1,16 @@
+# application-local.yml (내 PC 개발용)
+spring:
+  config:
+    import: optional:file:../.env[.properties]   # 루트의 .env 를 직접 읽기
+  docker:
+    compose:
+      file: ../compose.yaml          # bootRun 때 MySQL·Redis 컨테이너 자동 실행
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+
+logging:
+  level:
+    org.hibernate.SQL: debug
+    org.hibernate.orm.jdbc.bind: trace
