@@ -31,6 +31,12 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-websocket")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
 
+    // 인증 (JWT) · API 문서
+    implementation("io.jsonwebtoken:jjwt-api:0.13.0")
+    runtimeOnly("io.jsonwebtoken:jjwt-impl:0.13.0")
+    runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.13.0")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17")   // 2.8.x = Boot 3.5 라인 (3.x는 Boot 4용)
+
     // 데이터
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
@@ -51,7 +57,7 @@ dependencies {
     testImplementation("org.testcontainers:mysql")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
-    // 이후 추가 예정 (해당 기능 작업 때): jjwt, springdoc-openapi, caffeine, shedlock
+    // 이후 추가 예정 (해당 기능 작업 때): caffeine, shedlock
 }
 
 tasks.withType<Test> {
