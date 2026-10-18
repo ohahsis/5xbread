@@ -24,3 +24,9 @@ spring:
 server:
   shutdown: graceful
   forward-headers-strategy: native   # Nginx 뒤에서 X-Forwarded-For 읽기 (정의서 13-5)
+
+fivexbread:
+  signup:
+    daily-limit-per-ip: 10        # AU-02, 부록 B
+    terms-version: "v1"           # 서비스 이용약관
+    privacy-version: "v1"         # 개인정보 수집·이용
