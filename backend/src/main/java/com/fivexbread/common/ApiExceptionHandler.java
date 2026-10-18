@@ -35,7 +35,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         ErrorCode errorCode = ex.getErrorCode();
         ProblemDetail problem = problemOf(errorCode, errorCode.getStatus(), ex.getDetail(), request);
         ex.getProperties().forEach(problem::setProperty);
-        return ResponseEntity.status(errorCode.getStatus()).body(problem);
+        return ResponseEntity.status(errorCode.getStatus()).headers(ex.getHeaders()).body(problem);
     }
 
     // 메서드 보안(@PreAuthorize)이 던지는 예외. 아래 Exception 핸들러에 잡혀 500이 되지 않게 먼저 처리
