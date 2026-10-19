@@ -35,8 +35,9 @@ public class SignupRateLimiter {
         // 생성자는 키가 없으면 0으로 만든다(GET 후 SET). 증가는 INCR 이라 원자적
         RedisAtomicLong counter = new RedisAtomicLong(key(clientIp, today), connectionFactory);
         long count = counter.incrementAndGet();
-        // INCR과 EXPIREAT은 따로 실행되므로 첫 번째만이 아니라 매번 건다.
-        // 생성자의 SET이 TTL을 지우는 경우와 두 명령 사이에 앱이 죽는 경우에도 TTL 없는 키가 남지 않게
+
+        // INCR과 EXPIREAT은 따로 실행되므로, 두 명령 사이에 앱이 죽어도 다음 요청이 TTL을 다시 걸도록 매번 건다.
+        // 자정이라는 절대 시각이라 매번 걸어도 만료가 뒤로 밀리지 않는다.
         counter.expireAt(midnight.toInstant());
 
         if (count > properties.dailyLimitPerIp()) {
