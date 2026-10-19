@@ -26,6 +26,9 @@ server:
   forward-headers-strategy: native   # Nginx 뒤에서 X-Forwarded-For 읽기 (정의서 13-5)
 
 fivexbread:
+  jwt:
+    secret: ${JWT_SECRET:}        # 저장소에 넣지 않음. 비어 있으면 앱이 뜨지 않음 (UTF-8 32바이트 이상)
+    access-token-ttl: 30m         # 정의서 5장
   signup:
     daily-limit-per-ip: 10        # AU-02, 부록 B
     terms-version: "v1"           # 서비스 이용약관

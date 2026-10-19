@@ -16,6 +16,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,7 +25,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @WebMvcTest(controllers = SecurityConfigTest.TestController.class)
-@Import({SecurityConfig.class, ApiExceptionHandler.class, SecurityConfigTest.TestController.class})
+@Import({SecurityConfig.class, ApiExceptionHandler.class, JwtTestConfig.class, SecurityConfigTest.TestController.class})
+@ActiveProfiles("test")
 class SecurityConfigTest {
 
     @Autowired

@@ -10,10 +10,11 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
 /**
- * pod 3개라 서버 세션 없이 JWT 만 쓴다 (정의서 5장). JWT 필터는 로그인 기능(AU) 작업 때 추가.
+ * pod 3개라 서버 세션 없이 JWT 만 쓴다 (정의서 5장). Bearer 토큰은 JwtAuthenticationFilter 가 검증한다.
  * 필터 단계의 401·403도 ApiExceptionHandler 로 넘겨 다른 오류와 같은 ProblemDetail 형식으로 응답한다.
  */
 @Configuration
@@ -24,6 +25,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
+            JwtProvider jwtProvider,
             @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver) throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)            // 쿠키 세션이 아닌 Bearer 헤더 인증
@@ -31,6 +33,7 @@ public class SecurityConfig {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)          // 로그아웃은 DELETE /auth/tokens/current
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))   // 앱 3개라 서버 세션을 사용하지 않음(JWT 토큰으로 인증)
+                .addFilterBefore(new JwtAuthenticationFilter(jwtProvider), UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/error").permitAll()     // 오류 포워드가 401로 덮이지 않게
                         .requestMatchers("/actuator/health/**").permitAll()

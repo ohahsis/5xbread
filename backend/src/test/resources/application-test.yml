@@ -1,0 +1,4 @@
+# application-test.yml (테스트 전용. 실제 키가 아니다)
+fivexbread:
+  jwt:
+    secret: test-only-jwt-secret-0123456789abcdef0123456789
