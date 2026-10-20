@@ -32,7 +32,7 @@
 | 로컬 인프라 | `compose.yaml`: MySQL·Redis만. 앱은 IDE에서 실행. Spring Docker Compose Support가 접속 정보를 자동 연결 (`spring.docker.compose.file=../compose.yaml`) |
 | 앱 3개 구성 | `compose.full.yaml`: app1~3 + Nginx. 앱 3개 작업 때 Dockerfile과 함께 추가 |
 | 비밀 값 | `.env`(git 제외)에 두고 `.env.example`에 키 이름만 커밋 |
-| 사장님 초기 계정 | Flyway SQL이 아니라 `ApplicationRunner`로 생성. ADMIN이 없으면 `.env`의 `ADMIN_INITIAL_PASSWORD`를 BCrypt로 해시해 만들고 `must_change_password=true` |
+| 사장님 초기 계정 | Flyway SQL이 아니라 `ApplicationRunner`로 생성. ADMIN이 없으면 `.env`의 `ADMIN_INITIAL_PHONE`·`ADMIN_INITIAL_PASSWORD`(BCrypt로 해시)로 만들고 `must_change_password=true`. 값이 비었거나 형식이 틀리면 앱은 띄우고 경고만 남김. 앱 여러 개가 동시에 떠도 MySQL `GET_LOCK`으로 한 명만 생성 |
 | 테스트 손님 1,000명 | `local` 프로필 전용 마이그레이션 위치에만 둠 (운영에는 들어가지 않게) |
 | 브랜치 | `main` 보호(PR로만 merge, squash merge). 작업 브랜치는 `feat/{기능ID}-{이름}`, `fix/`, `chore/`, `test/` |
 
@@ -134,3 +134,4 @@ MySQL 컨테이너는 `--default-time-zone=+09:00`, 문자셋은 `utf8mb4`로 �
 | 2026-10-20 | 6장: AU-05 동시 요청을 "한도에 닿는 시도가 비교 시작 때 잠금 생성"으로 구체화 (잠금 해제 후 해석과의 충돌 해소) |
 | 2026-10-20 | 6장: Refresh Token 재사용 감지(used 기록 키) 해석 추가 |
 | 2026-10-20 | 6장: AU-05 카운터 설명을 현재 동작에 맞춤(24시간 무시도 시 초기화 포함), AU-01 로그인 ID·로그아웃 해석 추가, 가입 여부 노출·Access Token 잔존 한계 명시 |
+| 2026-10-20 | 2장: 사장님 초기 계정에 `ADMIN_INITIAL_PHONE`, 값이 없을 때 건너뛰기, 동시 시작 처리 추가 |
