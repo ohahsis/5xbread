@@ -14,7 +14,10 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpEntity;
@@ -26,6 +29,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+@ExtendWith(OutputCaptureExtension.class)
 class SignupApiTest extends IntegrationTestSupport {
 
     private static final String URL = "/api/v1/members";
@@ -100,7 +104,7 @@ class SignupApiTest extends IntegrationTestSupport {
     }
 
     @Test
-    void 이미_가입한_번호면_409_DUPLICATE_PHONE() {
+    void 이미_가입한_번호면_409_DUPLICATE_PHONE이고_로그에_번호_원문이_없다(CapturedOutput output) {
         assertThat(signUp("010-1234-5678", "203.0.113.1").getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
         ResponseEntity<JsonNode> response = signUp("01012345678", "203.0.113.2");
@@ -108,10 +112,11 @@ class SignupApiTest extends IntegrationTestSupport {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody().get("code").asText()).isEqualTo("DUPLICATE_PHONE");
         assertThat(count("01012345678")).isEqualTo(1);
+        assertThat(output).doesNotContain("Duplicate entry", "01012345678");   // AU-10: Hibernate 오류 로그 포함
     }
 
     @Test
-    void 같은_번호로_동시에_20건_가입하면_1건만_성공한다() throws Exception {
+    void 같은_번호로_동시에_20건_가입하면_1건만_성공하고_로그에_번호_원문이_없다(CapturedOutput output) throws Exception {
         int requests = 20;
         ExecutorService executor = Executors.newFixedThreadPool(requests);
         CountDownLatch ready = new CountDownLatch(requests);
@@ -139,6 +144,7 @@ class SignupApiTest extends IntegrationTestSupport {
         assertThat(statuses).filteredOn(HttpStatus.CONFLICT::equals).hasSize(requests - 1);
         assertThat(count("01055550001")).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM member_agreement", Integer.class)).isEqualTo(1);
+        assertThat(output).doesNotContain("Duplicate entry", "01055550001");
     }
 
     @Test

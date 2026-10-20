@@ -6,15 +6,12 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class MemberService {
-
-    private static final String UK_MEMBER_PHONE = "uk_member_phone";
 
     private final MemberRepository memberRepository;
     private final MemberAgreementRepository agreementRepository;
@@ -25,19 +22,15 @@ public class MemberService {
      * 회원과 약관 동의를 한 트랜잭션에 저장한다.
      * 중복 번호는 미리 SELECT로 확인하지 않고 uk_member_phone 제약에 맡긴다.
      * 동시에 들어온 같은 번호 요청이 둘 다 "없음"을 보고 통과하는 경쟁 조건을 DB가 막는다 (13-5).
+     * 중복이면 오류 대신 0행을 돌려받는 INSERT 를 쓴다. 중복 키 오류는 Hibernate 가 번호 원문과 함께 로그에 남기기 때문 (AU-10)
      */
     @Transactional
     public Member signUp(String phone, String passwordHash, String name) {
         LocalDateTime now = LocalDateTime.now(clock);
-        Member member;
-        try {
-            member = memberRepository.saveAndFlush(Member.signUp(phone, passwordHash, name, now));
-        } catch (DataIntegrityViolationException e) {
-            if (isDuplicatePhone(e)) {
-                throw new BusinessException(ErrorCode.DUPLICATE_PHONE);
-            }
-            throw e;
+        if (memberRepository.insertIfPhoneAbsent(Member.signUp(phone, passwordHash, name, now)) == 0) {
+            throw new BusinessException(ErrorCode.DUPLICATE_PHONE);
         }
+        Member member = memberRepository.findByPhone(phone).orElseThrow();   // 같은 트랜잭션이 넣은 행이라 반드시 보인다
         agreementRepository.save(new MemberAgreement(
                 member.getId(), properties.termsVersion(), properties.privacyVersion(), now));
         return member;
@@ -76,11 +69,5 @@ public class MemberService {
         // 따라서 트랜잭션 이후 flush 되는 save() 대신, 바로 되는 saveAndFlush() 를 사용한다.
         memberRepository.saveAndFlush(Member.initialAdmin(phone, passwordHash, LocalDateTime.now(clock)));
         return true;
-    }
-
-    // MySQL: Duplicate entry '...' for key 'member.uk_member_phone'
-    private static boolean isDuplicatePhone(DataIntegrityViolationException e) {
-        String message = e.getMostSpecificCause().getMessage();
-        return message != null && message.contains(UK_MEMBER_PHONE);
     }
 }
