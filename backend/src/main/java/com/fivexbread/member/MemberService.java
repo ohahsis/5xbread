@@ -48,6 +48,11 @@ public class MemberService {
         return memberRepository.findByPhone(phone);
     }
 
+    @Transactional(readOnly = true)
+    public Optional<Member> findById(long memberId) {
+        return memberRepository.findById(memberId);
+    }
+
     // MySQL: Duplicate entry '...' for key 'member.uk_member_phone'
     private static boolean isDuplicatePhone(DataIntegrityViolationException e) {
         String message = e.getMostSpecificCause().getMessage();

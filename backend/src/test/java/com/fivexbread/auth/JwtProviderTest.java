@@ -22,7 +22,7 @@ class JwtProviderTest {
 
     private static final String SECRET = "test-only-jwt-secret-0123456789abcdef0123456789";
     private static final Instant NOW = Instant.parse("2026-10-20T00:00:00Z");
-    private static final JwtProperties PROPERTIES = new JwtProperties(SECRET, Duration.ofMinutes(30));
+    private static final JwtProperties PROPERTIES = new JwtProperties(SECRET, Duration.ofMinutes(30), Duration.ofDays(14));
 
     private final JwtProvider provider = providerAt(NOW);
 
@@ -54,7 +54,7 @@ class JwtProviderTest {
     @Test
     void 다른_키로_서명한_토큰은_INVALID_SIGNATURE() {
         String forged = new JwtProvider(
-                new JwtProperties("attacker-secret-0123456789abcdef0123456789", Duration.ofMinutes(30)),
+                new JwtProperties("attacker-secret-0123456789abcdef0123456789", Duration.ofMinutes(30), Duration.ofDays(14)),
                 Clock.fixed(NOW, ClockConfig.KST)).issue(1L, Role.ADMIN, false);
 
         assertReason(provider, forged, Reason.INVALID_SIGNATURE);
@@ -104,7 +104,7 @@ class JwtProviderTest {
 
     @Test
     void 비밀키가_32바이트보다_짧으면_만들_수_없다() {
-        assertThatThrownBy(() -> new JwtProvider(new JwtProperties("short-secret", Duration.ofMinutes(30)),
+        assertThatThrownBy(() -> new JwtProvider(new JwtProperties("short-secret", Duration.ofMinutes(30), Duration.ofDays(14)),
                 Clock.fixed(NOW, ClockConfig.KST)))
                 .isInstanceOf(WeakKeyException.class);
     }

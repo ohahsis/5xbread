@@ -29,6 +29,7 @@ fivexbread:
   jwt:
     secret: ${JWT_SECRET:}        # 저장소에 넣지 않음. 비어 있으면 앱이 뜨지 않음 (UTF-8 32바이트 이상)
     access-token-ttl: 30m         # 정의서 5장
+    refresh-token-ttl: 14d        # 정의서 5장. Redis 키 TTL = 쿠키 Max-Age
   login:
     max-failures: 5               # AU-05, 부록 B: 연속 5회 실패하면
     failure-retention: 24h        # 실패 카운터 정리용 TTL, 실패할 때마다 갱신 (decisions.md 6장)

@@ -83,7 +83,7 @@ class JwtAuthenticationTest {
     @Test
     void 서명이_위조된_토큰은_401_ProblemDetail() throws Exception {
         String forged = new JwtProvider(
-                new JwtProperties("attacker-secret-0123456789abcdef0123456789", Duration.ofMinutes(30)),
+                new JwtProperties("attacker-secret-0123456789abcdef0123456789", Duration.ofMinutes(30), Duration.ofDays(14)),
                 clock).issue(7L, Role.ADMIN, false);
 
         expectUnauthorized(withBearer(forged, "/api/v1/members/me"));
