@@ -34,6 +34,9 @@ fivexbread:
     max-failures: 5               # AU-05, 부록 B: 연속 5회 실패하면
     failure-retention: 24h        # 실패 카운터 정리용 TTL, 실패할 때마다 갱신 (decisions.md 6장)
     lock-duration: 10m            # 5번째 실패부터 10분 잠금
+  admin:
+    initial-phone: ${ADMIN_INITIAL_PHONE:}         # 사장님 초기 계정 (decisions.md 2장). 비어 있으면 경고만 남기고 만들지 않음
+    initial-password: ${ADMIN_INITIAL_PASSWORD:}   # 저장소에 넣지 않음. BCrypt 해시만 저장, 첫 로그인 때 변경 강제
   signup:
     daily-limit-per-ip: 10        # AU-02, 부록 B
     terms-version: "v1"           # 서비스 이용약관

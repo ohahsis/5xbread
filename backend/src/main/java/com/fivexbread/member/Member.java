@@ -81,6 +81,13 @@ public class Member {
         return new Member(phone, passwordHash, name, Role.CUSTOMER, now);
     }
 
+    /** 사장님 초기 계정 (decisions.md 2장). 첫 로그인 때 비밀번호 변경을 강제한다 (AU-08) */
+    public static Member initialAdmin(String phone, String passwordHash, LocalDateTime now) {
+        Member member = new Member(phone, passwordHash, "사장님", Role.ADMIN, now);
+        member.mustChangePassword = true;
+        return member;
+    }
+
     public MaskedPhone maskedPhone() {
         return MaskedPhone.from(phone);
     }
