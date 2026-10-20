@@ -23,6 +23,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -32,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 @WebMvcTest(controllers = ApiExceptionHandlerTest.TestController.class)
 @AutoConfigureMockMvc(addFilters = false)
 @Import({ApiExceptionHandlerTest.TestController.class, ApiExceptionHandler.class})
+@ActiveProfiles("test")   // 기본 프로필(local)이면 .env 를 읽고 SQL 바인딩 값을 TRACE 로 남겨 다른 테스트 로그에도 섞인다
 class ApiExceptionHandlerTest {
 
     @Autowired
