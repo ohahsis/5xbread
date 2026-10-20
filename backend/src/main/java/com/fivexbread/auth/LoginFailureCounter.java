@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
 public class LoginFailureCounter {
 
     /*
-     * 반환 {상태, 값}: 잠김 {0, 잠금 남은 ms} / 비교 허용 {1, 횟수} / 비교 허용이지만 이 시도로 잠금을 만듦 {2, 횟수}
+     * 반환 {상태, 값}: 1. 잠김 {0, 잠금 남은 ms} / 2. 비교 허용 {1, 횟수} / 3. 비교 허용이지만 이 시도로 잠금을 만듦 {2, 횟수}
      * 잠금 확인·INCR·EXPIRE·잠금 생성을 한 번에 해야 동시에 들어온 요청이 모두 확인을 통과하지 못한다.
      */
     @SuppressWarnings("rawtypes")
@@ -36,7 +36,7 @@ public class LoginFailureCounter {
             -- ARGV[1]=최대 횟수(5), ARGV[2]=카운터 정리용 TTL(초), ARGV[3]=잠금 시간(초)
             local lockTtl = redis.call('PTTL', KEYS[2])
             
-            -- 잠겨 있으면 세지 않고 남은 잠금 시간(ms)을 돌려준다
+            -- 1. 잠겨 있으면 세지 않고 남은 잠금 시간(ms)을 돌려준다
             if lockTtl > 0 then
                 return {0, lockTtl}
             end
@@ -45,11 +45,13 @@ public class LoginFailureCounter {
             local count = redis.call('INCR', KEYS[1])
             redis.call('EXPIRE', KEYS[1], ARGV[2])
             
-            -- 한도에 닿는 시도는 비교를 시작하기 전에 잠금을 먼저 만든다
+            -- 3. 한도에 닿는 시도는 비교를 시작하기 전에 잠금을 먼저 만든다
             if count >= tonumber(ARGV[1]) then
                 redis.call('SET', KEYS[2], '1', 'EX', ARGV[3])
                 return {2, count}
             end
+            
+            -- 2. 비교를 허용한다
             return {1, count}
             """, List.class);
 
@@ -71,7 +73,7 @@ public class LoginFailureCounter {
         if (state == 0) {
             throw locked(((Number) result.get(1)).longValue());
         }
-        return state == 2;
+        return state == 2;  // 잠금을 만든 마지막 시도(ACQUIRE 의 2번 상태)라면 true 반환
     }
 
     /** 틀렸을 때. 횟수는 acquire 때 이미 셌다. 이 시도가 잠금을 만들었으면 423 */
