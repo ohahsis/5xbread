@@ -4,6 +4,7 @@ import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -40,6 +41,11 @@ public class MemberService {
         agreementRepository.save(new MemberAgreement(
                 member.getId(), properties.termsVersion(), properties.privacyVersion(), now));
         return member;
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Member> findByPhone(String phone) {
+        return memberRepository.findByPhone(phone);
     }
 
     // MySQL: Duplicate entry '...' for key 'member.uk_member_phone'
