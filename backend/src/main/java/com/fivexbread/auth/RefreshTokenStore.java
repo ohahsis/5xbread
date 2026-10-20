@@ -67,12 +67,12 @@ public class RefreshTokenStore {
 
     private static final RedisScript<Long> REVOKE_ALL = RedisScript.of("""
             -- KEYS[1]=refresh:index:{memberId}, ARGV[1]=토큰 키 접두사 refresh:{memberId}:
-            local ids = redis.call('SMEMBERS', KEYS[1])
-            for _, id in ipairs(ids) do
-                redis.call('DEL', ARGV[1] .. id)
+            local ids = redis.call('SMEMBERS', KEYS[1])     -- 회원 42의 토큰 ID 목록을 꺼냄
+            for _, id in ipairs(ids) do                     -- 하나씩 돌면서
+                redis.call('DEL', ARGV[1] .. id)            -- "refresh:42:" .. id → 토큰 키 삭제
             end
-            redis.call('DEL', KEYS[1])
-            return #ids
+            redis.call('DEL', KEYS[1])                      -- 인덱스 Set도 삭제
+            return #ids                                     -- 지운 개수 (#은 Lua에서 길이)
             """, Long.class);
 
     private final StringRedisTemplate redisTemplate;
