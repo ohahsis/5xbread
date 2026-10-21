@@ -34,3 +34,4 @@ Spring Security + JWT, STOMP WebSocket, Testcontainers
 ## Git
 - main 직접 커밋 금지. 브랜치: feat/{기능ID}-{이름}, fix/, chore/, test/
 - 커밋 메시지: feat:, fix:, test:, docs:, chore:
+- 기능 커밋에는 그 기능의 테스트를 함께 넣는다. test: 는 테스트만 추가·수정할 때 사용
