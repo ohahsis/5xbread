@@ -37,6 +37,9 @@ fivexbread:
   admin:
     initial-phone: ${ADMIN_INITIAL_PHONE:}         # 사장님 초기 계정 (decisions.md 2장). 비어 있으면 경고만 남기고 만들지 않음
     initial-password: ${ADMIN_INITIAL_PASSWORD:}   # 저장소에 넣지 않음. BCrypt 해시만 저장, 첫 로그인 때 변경 강제
+  store:
+    open-time: "08:00"             # 부록 B 영업시간. 픽업 시각은 이 시각 이상
+    close-time: "21:00"            # 픽업 시각은 이 시각 미만
   signup:
     daily-limit-per-ip: 10        # AU-02, 부록 B
     terms-version: "v1"           # 서비스 이용약관
