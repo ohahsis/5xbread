@@ -62,4 +62,5 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    systemProperty("user.timezone", "Asia/Seoul")   // CI(UTC)와 로컬(KST)의 차이 제거 (decisions.md 3장)
 }

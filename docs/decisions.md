@@ -46,6 +46,7 @@
 | 엔티티 | `LocalDateTime` / `LocalDate` |
 | API 요청·응답 | `OffsetDateTime`, `+09:00` 오프셋 포함 |
 | 현재 시각 | 주입한 `Clock`(`ZoneId.of("Asia/Seoul")`)만 사용. `LocalDateTime.now()` 직접 호출 금지 |
+| JVM 기본 시간대 | `Asia/Seoul`로 고정 (앱 `main`, 테스트 `user.timezone`). Hibernate의 `jdbc.time_zone` 변환이 JVM 시간대를 기준으로 하므로, UTC인 CI·컨테이너에서 `LocalDateTime`이 9시간 밀려 저장되는 것을 막는다 |
 
 MySQL 컨테이너는 `--default-time-zone=+09:00`, 문자셋은 `utf8mb4`로 띄웁니다.
 
