@@ -1,12 +1,15 @@
 package com.fivexbread.saledate;
 
 import java.time.LocalDate;
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface SaleDateRepository extends JpaRepository<SaleDate, LocalDate> {
+
+    List<SaleDate> findBySaleDateBetweenOrderBySaleDate(LocalDate from, LocalDate to);
 
     /**
      * 수량 설정 버전 비교와 증가를 한 문장에 (decisions.md 6장 "A-02 수량 버전 증가"). 1이면 성공, 0이면 다른 저장이 먼저 올림 → 412.

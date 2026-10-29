@@ -60,6 +60,17 @@ public class SaleDate {
         return !now.isBefore(openAt);
     }
 
+    /** 손님에게 보여 주는 상태. 예약 기간은 [오픈, 마감) (R-11, decisions.md 6장) */
+    public SaleDateStatus status(LocalDateTime now) {
+        if (holiday) {
+            return SaleDateStatus.HOLIDAY;
+        }
+        if (!isOpened(now)) {
+            return SaleDateStatus.NOT_OPEN;
+        }
+        return now.isBefore(closeAt) ? SaleDateStatus.OPEN : SaleDateStatus.CLOSED;
+    }
+
     public String eTag() {
         return eTagOf(version);
     }

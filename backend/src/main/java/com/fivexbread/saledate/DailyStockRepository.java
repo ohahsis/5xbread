@@ -13,6 +13,28 @@ public interface DailyStockRepository extends JpaRepository<DailyStock, Long> {
     List<DailyStock> findBySaleDate(LocalDate saleDate);
 
     /**
+     * 손님 빵 목록 (13-4 카탈로그 쿼리). 판매 중인 빵만, 쿼리 1번이라 N+1 없음.
+     * 1차는 잔여를 DB 에서 계산하므로(decisions.md 4장) reserved_qty 를 읽어 ix_daily_stock_catalog 커버링은 되지 않는다.
+     */
+    @Query("""
+            select new com.fivexbread.saledate.SaleBreadRow(
+                b.id, b.name, b.price, s.perUserLimit, s.reservableQty, s.reservedQty, b.displayOrder)
+            from DailyStock s join Bread b on b.id = s.breadId
+            where s.saleDate = :saleDate and b.active = true
+            order by b.displayOrder, b.id
+            """)
+    List<SaleBreadRow> findSaleBreads(@Param("saleDate") LocalDate saleDate);
+
+    /** 이 날 한 손님이 빵별로 예약한 수량(취소 제외, R-03 합산 기준). 예약 엔티티는 C-04 에서 만든다 */
+    @Query(value = """
+            SELECT i.bread_id AS breadId, SUM(i.quantity) AS quantity
+            FROM reservation r JOIN reservation_item i ON i.reservation_id = r.id
+            WHERE r.member_id = :memberId AND r.sale_date = :saleDate AND r.status <> 'CANCELED'
+            GROUP BY i.bread_id
+            """, nativeQuery = true)
+    List<BreadQuantity> sumReservedQuantities(@Param("memberId") long memberId, @Param("saleDate") LocalDate saleDate);
+
+    /**
      * 총량을 예약 수량보다 줄이지 않는 경우에만 바꾼다 (R-07). 0이면 검사 뒤 그 사이 예약이 들어온 것 → 저장 전체 롤백 후 422.
      * 조건이 없으면 ck_stock_range(reserved ≤ reservable) 위반 오류가 나고, 조건이 있으면 0행으로 끝난다.
      */

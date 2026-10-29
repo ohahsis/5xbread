@@ -16,6 +16,8 @@ record SaleDateTestData(JdbcTemplate jdbc, LocalDate today) {
 
     void clean() {
         LocalDate from = today.plusDays(FROM_DAYS);
+        jdbc.update("DELETE FROM reservation_item WHERE reservation_id IN (SELECT id FROM reservation WHERE sale_date >= ?)",
+                from);
         jdbc.update("DELETE FROM reservation WHERE sale_date >= ?", from);
         jdbc.update("DELETE FROM daily_stock WHERE sale_date >= ?", from);
         jdbc.update("DELETE FROM pickup_slot WHERE sale_date >= ?", from);
@@ -48,6 +50,32 @@ record SaleDateTestData(JdbcTemplate jdbc, LocalDate today) {
     }
 
     void reservation(LocalDate date, long slotId) {
+        reservation(date, slotId, "RESERVED");
+    }
+
+    /** MEMBER_PHONE 손님의 예약. 예약 id 를 돌려준다 */
+    long reservation(LocalDate date, long slotId, String status) {
+        long memberId = memberId();
+        LocalDateTime pickupAt = jdbc.queryForObject("SELECT pickup_at FROM pickup_slot WHERE id = ?",
+                LocalDateTime.class, slotId);
+        int seq = jdbc.queryForObject("SELECT COUNT(*) FROM reservation WHERE sale_date = ?", Integer.class, date) + 1;
+        String idempotencyKey = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO reservation (reservation_no, member_id, phone_last4, sale_date, pickup_slot_id, pickup_at,
+                                         status, total_price, idempotency_key)
+                VALUES (?, ?, '0000', ?, ?, ?, ?, 3500, ?)""",
+                "%02d%02d-%04d".formatted(date.getMonthValue(), date.getDayOfMonth(), seq),
+                memberId, date, slotId, pickupAt, status, idempotencyKey);
+        return jdbc.queryForObject("SELECT id FROM reservation WHERE idempotency_key = ?", Long.class, idempotencyKey);
+    }
+
+    void item(long reservationId, long breadId, int quantity) {
+        jdbc.update("INSERT INTO reservation_item (reservation_id, bread_id, quantity, unit_price) VALUES (?, ?, ?, 3500)",
+                reservationId, breadId, quantity);
+    }
+
+    /** MEMBER_PHONE 손님. 없으면 만든다 */
+    long memberId() {
         Long memberId = jdbc.query("SELECT id FROM member WHERE phone = ?", rs -> rs.next() ? rs.getLong(1) : null,
                 MEMBER_PHONE);
         if (memberId == null) {
@@ -55,14 +83,7 @@ record SaleDateTestData(JdbcTemplate jdbc, LocalDate today) {
                     MEMBER_PHONE, "$2a$10$" + "x".repeat(53), "예약손님");
             memberId = jdbc.queryForObject("SELECT id FROM member WHERE phone = ?", Long.class, MEMBER_PHONE);
         }
-        LocalDateTime pickupAt = jdbc.queryForObject("SELECT pickup_at FROM pickup_slot WHERE id = ?",
-                LocalDateTime.class, slotId);
-        jdbc.update("""
-                INSERT INTO reservation (reservation_no, member_id, phone_last4, sale_date, pickup_slot_id, pickup_at,
-                                         status, total_price, idempotency_key)
-                VALUES (?, ?, '0000', ?, ?, ?, 'RESERVED', 3500, ?)""",
-                "%02d%02d-%04d".formatted(date.getMonthValue(), date.getDayOfMonth(), slotId % 10000),
-                memberId, date, slotId, pickupAt, UUID.randomUUID().toString());
+        return memberId;
     }
 
     int version(LocalDate date) {
