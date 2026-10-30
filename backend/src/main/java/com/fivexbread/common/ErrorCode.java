@@ -42,6 +42,9 @@ public enum ErrorCode {
     INVALID_SALE_DATE(HttpStatus.UNPROCESSABLE_ENTITY, "판매일 설정이 규칙에 맞지 않습니다"),          // errors[]: 위반 항목 전부 (A-04)
     SALE_DATE_HOLIDAY(HttpStatus.UNPROCESSABLE_ENTITY, "휴무일에는 수량을 설정할 수 없습니다"),
     INVALID_STOCK_ROWS(HttpStatus.UNPROCESSABLE_ENTITY, "수량 설정에 맞지 않는 행이 있습니다"),        // errors[]: 틀린 행 전부 (A-02)
+    INVALID_PICKUP_SLOT(HttpStatus.UNPROCESSABLE_ENTITY, "이 판매일의 픽업 시간대가 아닙니다"),         // C-04, decisions.md 6장
+    BREAD_NOT_AVAILABLE(HttpStatus.UNPROCESSABLE_ENTITY, "이 판매일에 예약할 수 없는 빵이 있습니다"),   // errors[]: breadId 전부 (C-04)
+    IDEMPOTENCY_KEY_MISMATCH(HttpStatus.UNPROCESSABLE_ENTITY, "같은 Idempotency-Key 로 다른 요청을 보냈습니다"),   // N-06
 
     ACCOUNT_LOCKED(HttpStatus.LOCKED, "로그인 실패가 반복되어 계정이 잠시 잠겼습니다"),
     IDEMPOTENCY_KEY_REQUIRED(HttpStatus.PRECONDITION_REQUIRED, "Idempotency-Key 헤더가 필요합니다"),
