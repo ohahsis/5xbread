@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 판매일별 수량 조회·일괄 저장 (A-02, R-01·R-07, 13-8 2·3단계). Redis 반영은 C-04 에서 붙인다 (decisions.md 6장).
+ * 판매일별 수량 조회·일괄 저장 (A-02, R-01·R-07, 13-8 2·3단계). DB 만 다룬다. Redis 반영은 StockFacade 가 트랜잭션 밖에서 한다.
  *
  * 저장 순서 (한 트랜잭션):
  * 1. If-Match 버전이 현재와 다르면 412 (검사 전에 빨리 끝냄)
@@ -50,24 +50,34 @@ public class StockService {
         return new Result(view(date), saleDate.eTag());
     }
 
+    /**
+     * 기존 행의 예약 가능 총량 변화. 저장 전에 트랜잭션 밖(StockFacade)에서 Redis 를 먼저 줄이려고 같은 검사를 미리 한다.
+     * 버전이 같으면 그사이 다른 수량 저장이 없었으므로, 저장 트랜잭션에서도 같은 변화가 된다.
+     */
+    @Transactional(readOnly = true)
+    public List<ReservableChange> reservableChanges(LocalDate date, int expectedVersion, List<StockRowRequest> rows) {
+        Map<Long, DailyStock> stocks = checkRows(date, expectedVersion, rows);
+        List<ReservableChange> changes = new ArrayList<>();
+        for (StockRowRequest row : rows) {
+            DailyStock stock = stocks.get(row.breadId());
+            if (stock != null && stock.getReservableQty() != row.reservableQty()) {
+                changes.add(new ReservableChange(row.breadId(), stock.getReservableQty(), row.reservableQty()));
+            }
+        }
+        return changes;
+    }
+
+    /** @param before 저장 전 예약 가능 총량, after 저장할 총량 */
+    public record ReservableChange(long breadId, int before, int after) {
+
+        public int delta() {
+            return after - before;
+        }
+    }
+
     @Transactional
     public Result put(LocalDate date, int expectedVersion, List<StockRowRequest> rows) {
-        SaleDate saleDate = findSaleDate(date);
-        if (saleDate.isHoliday()) {
-            throw new BusinessException(ErrorCode.SALE_DATE_HOLIDAY);
-        }
-        if (saleDate.getVersion() != expectedVersion) {
-            throw new BusinessException(ErrorCode.PRECONDITION_FAILED);
-        }
-
-        Map<Long, DailyStock> stocks = dailyStockRepository.findBySaleDate(date).stream()
-                .collect(Collectors.toMap(DailyStock::getBreadId, Function.identity()));
-        Map<Long, Bread> breads = breadRepository.findAllById(rows.stream().map(StockRowRequest::breadId).toList())
-                .stream().collect(Collectors.toMap(Bread::getId, Function.identity()));
-        List<StockRowError> errors = validate(rows, stocks, breads);
-        if (!errors.isEmpty()) {
-            throw invalidRows(errors);
-        }
+        Map<Long, DailyStock> stocks = checkRows(date, expectedVersion, rows);
 
         if (saleDateRepository.increaseVersion(date, expectedVersion) == 0) {
             throw new BusinessException(ErrorCode.PRECONDITION_FAILED);
@@ -91,6 +101,27 @@ public class StockService {
                     .toList());
         }
         return new Result(view(date), SaleDate.eTagOf(expectedVersion + 1));
+    }
+
+    /** 404 → 휴무일 422 → 버전 412 → 행 검사 422. 통과하면 이 날의 현재 수량 행(breadId → 행) */
+    private Map<Long, DailyStock> checkRows(LocalDate date, int expectedVersion, List<StockRowRequest> rows) {
+        SaleDate saleDate = findSaleDate(date);
+        if (saleDate.isHoliday()) {
+            throw new BusinessException(ErrorCode.SALE_DATE_HOLIDAY);
+        }
+        if (saleDate.getVersion() != expectedVersion) {
+            throw new BusinessException(ErrorCode.PRECONDITION_FAILED);
+        }
+
+        Map<Long, DailyStock> stocks = dailyStockRepository.findBySaleDate(date).stream()
+                .collect(Collectors.toMap(DailyStock::getBreadId, Function.identity()));
+        Map<Long, Bread> breads = breadRepository.findAllById(rows.stream().map(StockRowRequest::breadId).toList())
+                .stream().collect(Collectors.toMap(Bread::getId, Function.identity()));
+        List<StockRowError> errors = validate(rows, stocks, breads);
+        if (!errors.isEmpty()) {
+            throw invalidRows(errors);
+        }
+        return stocks;
     }
 
     // 첫 오류에서 멈추지 않고 모든 행의 모든 위반을 모은다 (13-8 어필 포인트)
@@ -155,7 +186,7 @@ public class StockService {
         return saleDateRepository.findById(date).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
-    private static BusinessException invalidRows(List<StockRowError> errors) {
+    static BusinessException invalidRows(List<StockRowError> errors) {
         return new BusinessException(ErrorCode.INVALID_STOCK_ROWS, null, Map.of("errors", errors));
     }
 }
