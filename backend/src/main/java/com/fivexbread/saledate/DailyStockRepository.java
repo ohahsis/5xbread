@@ -25,7 +25,26 @@ public interface DailyStockRepository extends JpaRepository<DailyStock, Long> {
             """)
     List<SaleBreadRow> findSaleBreads(@Param("saleDate") LocalDate saleDate);
 
-    /** 이 날 한 손님이 빵별로 예약한 수량(취소 제외, R-03 합산 기준). 예약 엔티티는 C-04 에서 만든다 */
+    /**
+     * 예약의 DB 최종 방어선 (13-1 6단계, R-02). 현재 읽기 + 행 X락이라 동시에 실행돼도 총량을 넘지 않는다.
+     * uk_daily_stock(sale_date, bread_id) 덕분에 정확히 1행만 잠근다. 0이면 DB 기준 잔여 부족.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE daily_stock SET reserved_qty = reserved_qty + :qty
+            WHERE sale_date = :saleDate AND bread_id = :breadId AND reserved_qty + :qty <= reservable_qty
+            """, nativeQuery = true)
+    int increaseReserved(@Param("saleDate") LocalDate saleDate, @Param("breadId") long breadId, @Param("qty") int qty);
+
+    /** Redis 재고 키 적재 기준: 잔여 = 예약 가능 총량 − 예약 수량 (decisions.md 6장 "C-04 Redis 재고 적재") */
+    @Query(value = """
+            SELECT bread_id AS breadId, reservable_qty - reserved_qty AS quantity
+            FROM daily_stock WHERE sale_date = :saleDate AND bread_id IN (:breadIds)
+            """, nativeQuery = true)
+    List<BreadQuantity> findRemaining(@Param("saleDate") LocalDate saleDate,
+                                      @Param("breadIds") Collection<Long> breadIds);
+
+    /** 이 날 한 손님이 빵별로 예약한 수량(취소 제외, R-03 합산 기준) */
     @Query(value = """
             SELECT i.bread_id AS breadId, SUM(i.quantity) AS quantity
             FROM reservation r JOIN reservation_item i ON i.reservation_id = r.id

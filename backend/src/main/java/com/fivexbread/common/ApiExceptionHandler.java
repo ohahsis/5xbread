@@ -5,6 +5,7 @@ import java.util.UUID;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
@@ -47,6 +48,13 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<Object> handleAuthentication(AuthenticationException ex, WebRequest request) {
         return respond(ErrorCode.UNAUTHENTICATED, request);
+    }
+
+    // Redis 장애: 예약을 503으로 중단한다 (Q-05). 복구되면 재고 키를 DB 기준으로 다시 채운다
+    @ExceptionHandler(RedisConnectionFailureException.class)
+    public ResponseEntity<Object> handleRedisDown(RedisConnectionFailureException ex, WebRequest request) {
+        log.error("Redis 연결 실패", ex);
+        return respond(ErrorCode.SERVICE_UNAVAILABLE, request);
     }
 
     // 처리하지 못한 예외: 내부 메시지는 응답에 넣지 않고 traceId로 로그와 연결

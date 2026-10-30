@@ -33,6 +33,7 @@ public class AdminStockController {
     private static final Pattern VERSION_TAG = Pattern.compile("^\"v(\\d{1,9})\"$");
 
     private final StockService stockService;
+    private final StockFacade stockFacade;
 
     @GetMapping
     public ResponseEntity<StocksResponse> get(@PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
@@ -45,7 +46,7 @@ public class AdminStockController {
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) String ifMatch,
             @RequestBody @NotEmpty @Size(max = 100) List<@Valid StockRowRequest> rows) {
-        StockService.Result result = stockService.put(date, expectedVersion(ifMatch), rows);
+        StockService.Result result = stockFacade.put(date, expectedVersion(ifMatch), rows);
         return ResponseEntity.ok().eTag(result.eTag()).body(result.stocks());
     }
 
