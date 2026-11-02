@@ -1,5 +1,7 @@
 package com.fivexbread.reservation;
 
+import com.fivexbread.common.BusinessException;
+import com.fivexbread.common.ErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -17,7 +19,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 /**
- * V1 reservation 테이블 (C-04). 취소·수령 컬럼은 C-06·A-06 에서 매핑한다.
+ * V1 reservation 테이블 (C-04, C-06). 수령 컬럼은 A-06 에서 매핑한다.
  * 예약 항목은 IDENTITY 라 JPA batch insert 가 안 돼 JdbcTemplate 로 넣는다 (13-1 어필 포인트).
  */
 @Entity
@@ -68,6 +70,16 @@ public class Reservation {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    // 취소 컬럼은 ReservationRepository.cancelIfReserved 의 조건부 UPDATE 로만 바꾼다 (엔티티 변경 감지로 덮어쓰지 않게)
+    @Column(insertable = false, updatable = false)
+    private LocalDateTime canceledAt;
+
+    @Column(insertable = false, updatable = false)
+    private Long canceledBy;
+
+    @Column(insertable = false, updatable = false, length = 100)
+    private String cancelReason;
+
     public static Reservation create(String reservationNo, long memberId, String phoneLast4, LocalDate saleDate,
                                      long pickupSlotId, LocalDateTime pickupAt, int totalPrice,
                                      String idempotencyKey, LocalDateTime now) {
@@ -83,6 +95,26 @@ public class Reservation {
         reservation.idempotencyKey = idempotencyKey;
         reservation.createdAt = now;
         return reservation;
+    }
+
+    /**
+     * 취소할 수 있는지 판단한다 (13-2 3단계, R-13). 엔티티는 바꾸지 않고, 확정은 조건부 UPDATE 가 한다.
+     * 손님은 픽업 60분 전 그 시각까지(포함), 사장님 직권 취소(A-08)는 마감 검사가 없다.
+     *
+     * @throws BusinessException RESERVED 가 아니면 409, 손님이 마감 뒤에 취소하면 422
+     */
+    public Cancellation cancel(ReservationActor actor, LocalDateTime now, String reason) {
+        if (status != ReservationStatus.RESERVED) {
+            throw new BusinessException(ErrorCode.INVALID_STATUS_TRANSITION);
+        }
+        if (!actor.admin() && now.isAfter(cancelDeadline())) {
+            throw new BusinessException(ErrorCode.CANCEL_DEADLINE_PASSED);
+        }
+        return new Cancellation(now, actor.memberId(), reason);
+    }
+
+    /** 취소 판단 결과. 조건부 UPDATE·이력·응답에 그대로 쓴다 */
+    public record Cancellation(LocalDateTime canceledAt, long canceledBy, String reason) {
     }
 
     public LocalDateTime cancelDeadline() {

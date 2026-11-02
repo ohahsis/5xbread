@@ -3,7 +3,9 @@ package com.fivexbread.reservation;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
 import com.fivexbread.reservation.ReservationIdempotency.StoredResponse;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,8 +46,8 @@ public class ReservationFacade {
 
         try {
             ReservationPlan plan = ruleService.check(memberId, request);
-            stockStore.reserve(plan);
-            ReservationResponse response = saveOrCompensate(plan, idempotencyKey);
+            String generation = stockStore.reserve(plan);
+            ReservationResponse response = saveOrCompensate(plan, generation, idempotencyKey);
             String location = "/api/v1/reservations/" + response.reservationId();
             afterCommit(idempotencyKey, fingerprint, location, response);
             return new Created(location, response);
@@ -55,33 +57,35 @@ public class ReservationFacade {
         }
     }
 
-    private ReservationResponse saveOrCompensate(ReservationPlan plan, String idempotencyKey) {
+    private ReservationResponse saveOrCompensate(ReservationPlan plan, String generation, String idempotencyKey) {
         try {
             return txService.create(plan, numbers.next(plan.saleDate()), idempotencyKey);
         } catch (StockShortageException e) {
             log.error("Redis 와 DB 잔여가 어긋남: Redis 차감은 통과했지만 DB 조건부 UPDATE 0행 saleDate={} breadIds={}",
                     plan.saleDate(), e.breadIds());
-            compensate(plan);
+            compensate(plan, generation);
             throw ReservationStockStore.outOfStock(e.breadIds().stream()
                     .map(breadId -> new StockFailure(breadId, "OUT_OF_STOCK", 0))
                     .toList());
         } catch (DataIntegrityViolationException e) {
-            compensate(plan);
+            compensate(plan, generation);
             // Redis 의 idem 키가 만료·유실된 뒤 같은 키가 다시 온 경우. DB UNIQUE 가 최종 방어
             if (e.getMessage() != null && e.getMessage().contains("uk_reservation_idem")) {
                 throw new BusinessException(ErrorCode.IDEMPOTENCY_KEY_MISMATCH);
             }
             throw e;
         } catch (RuntimeException e) {
-            compensate(plan);
+            compensate(plan, generation);
             throw e;
         }
     }
 
     /** 보상도 실패하면 Redis 잔여가 DB 보다 적은 "덜 팔리는" 방향으로 남는다. 3단계 N-05 가 바로잡는다 */
-    private void compensate(ReservationPlan plan) {
+    private void compensate(ReservationPlan plan, String generation) {
+        Map<Long, Integer> quantities = new LinkedHashMap<>();
+        plan.items().forEach(item -> quantities.put(item.breadId(), item.quantity()));
         try {
-            stockStore.release(plan);
+            stockStore.release(plan.saleDate(), plan.memberId(), quantities, generation);
         } catch (RuntimeException e) {
             log.error("예약 Redis 보상 실패 saleDate={} memberId={} items={}", plan.saleDate(), plan.memberId(),
                     summary(plan.items()), e);

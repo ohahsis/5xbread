@@ -1,11 +1,30 @@
 package com.fivexbread.reservation;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ReservationRepository extends JpaRepository<Reservation, Long> {
+
+    /** 손님 본인 예약. PK 로 1행을 찾은 뒤 member_id 를 비교해 추가 인덱스가 필요 없다 (13-2 어필 포인트) */
+    Optional<Reservation> findByIdAndMemberId(long id, long memberId);
+
+    /**
+     * 취소 확정 (13-2 4단계, 비교 후 교체). 취소·수령·직권 취소가 동시에 와도 RESERVED 인 동안 먼저 실행한 하나만 1행.
+     * 0이면 다른 요청이 먼저 상태를 바꾼 것 → 409.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE reservation
+            SET status = 'CANCELED', canceled_at = :canceledAt, canceled_by = :canceledBy, cancel_reason = :reason
+            WHERE id = :id AND status = 'RESERVED'
+            """, nativeQuery = true)
+    int cancelIfReserved(@Param("id") long id, @Param("canceledAt") LocalDateTime canceledAt,
+                         @Param("canceledBy") long canceledBy, @Param("reason") String reason);
 
     /**
      * 그날 손님의 예약 건수(취소 제외). Redis user_qty 의 건수 필드를 다시 채울 때의 기준으로만 쓴다 (decisions.md 6장).
