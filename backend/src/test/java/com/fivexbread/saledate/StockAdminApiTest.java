@@ -26,6 +26,7 @@ import org.mockito.Mockito;
 import org.mockito.stubbing.Answer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -52,6 +53,9 @@ class StockAdminApiTest extends IntegrationTestSupport {
     @Autowired
     Clock clock;
 
+    @Autowired
+    StringRedisTemplate redis;
+
     @MockitoSpyBean
     DailyStockRepository dailyStockRepository;                  // 검사와 UPDATE 사이에 예약이 끼어드는 상황을 만든다
 
@@ -63,6 +67,7 @@ class StockAdminApiTest extends IntegrationTestSupport {
     void setUp() {
         data = new SaleDateTestData(jdbcTemplate, LocalDate.now(clock));
         data.clean();
+        redis.getConnectionFactory().getConnection().serverCommands().flushAll();
         date = data.today().plusDays(25);
         url = "/api/v1/admin/sale-dates/" + date + "/stocks";
         data.saleDate(date);
@@ -185,13 +190,15 @@ class StockAdminApiTest extends IntegrationTestSupport {
         // 저장이 수량을 읽어 검사를 통과한 직후, 다른 트랜잭션의 예약이 소금빵 예약 수량을 30 → 50 으로 올리고 커밋한다
         // 리포지토리는 인터페이스 프록시라 callRealMethod 를 못 쓴다. 스파이의 기본 응답(원래 빈에 위임)을 그대로 부른다
         Answer<?> real = Mockito.mockingDetails(dailyStockRepository).getMockCreationSettings().getDefaultAnswer();
-        doAnswer(invocation -> {
+        // 첫 번째 읽기는 트랜잭션 밖의 미리 검사(StockFacade), 두 번째가 저장 트랜잭션의 검사다
+        doAnswer(real).doAnswer(invocation -> {
             Object stocks = real.answer(invocation);
             CompletableFuture.runAsync(() -> jdbcTemplate.update(
                     "UPDATE daily_stock SET reserved_qty = 50 WHERE sale_date = ? AND bread_id = 1", date)).join();
             return stocks;
         }).doAnswer(real)
                 .when(dailyStockRepository).findBySaleDate(any());
+        redis.opsForValue().set(StockKeys.stock(date, 1), "30");                // 소금빵 재고 키: 60 - 30
 
         ResponseEntity<JsonNode> response = put("\"v0\"", List.of(row(2, 80, 70, null), row(1, 100, 40, 4)), Role.ADMIN);
 
@@ -200,6 +207,41 @@ class StockAdminApiTest extends IntegrationTestSupport {
         assertThat(reservable(2)).isEqualTo(50);                  // 먼저 UPDATE 된 크로와상도 롤백
         assertThat(reservable(1)).isEqualTo(60);
         assertThat(data.version(date)).isZero();
+        assertThat(redis.opsForValue().get(StockKeys.stock(date, 1))).isEqualTo("30");   // 미리 줄인 20 을 보상
+    }
+
+    @Test
+    void 재고_키가_있으면_늘리기는_커밋_후_INCRBY_줄이기는_먼저_DECRBY하고_키가_없으면_DB만_바꾼다() {
+        redis.opsForValue().set(StockKeys.stock(date, 1), "30");                // 60 - 30
+        redis.opsForValue().set(StockKeys.stock(date, 2), "40");                // 50 - 10
+
+        ResponseEntity<JsonNode> response = put("\"v0\"",
+                List.of(row(1, 100, 70, 4), row(2, 80, 35, null), row(3, 40, 20, null)), Role.ADMIN);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(redis.opsForValue().get(StockKeys.stock(date, 1))).isEqualTo("40");    // +10
+        assertThat(redis.opsForValue().get(StockKeys.stock(date, 2))).isEqualTo("25");    // -15
+        assertThat(redis.hasKey(StockKeys.stock(date, 3))).isFalse();                      // 새 행: 첫 예약 때 적재
+        assertThat(reservable(1)).isEqualTo(70);
+        assertThat(reservable(2)).isEqualTo(35);
+    }
+
+    @Test
+    void 줄이기가_Redis에서_막히면_422이고_DB와_Redis_모두_바뀌지_않는다() {
+        // DB 는 예약 30 이라 총량 50 이 가능해 보이지만, 처리 중인 예약까지 합친 Redis 잔여는 5 뿐이다
+        redis.opsForValue().set(StockKeys.stock(date, 1), "5");
+        redis.opsForValue().set(StockKeys.stock(date, 2), "40");
+
+        ResponseEntity<JsonNode> response = put("\"v0\"", List.of(row(2, 80, 45, null), row(1, 100, 50, 4)), Role.ADMIN);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getBody().get("code").asText()).isEqualTo("INVALID_STOCK_ROWS");
+        assertThat(errors(response)).containsExactly("1:reservableQty:STOCK_BELOW_RESERVED:55");   // 60 - 5
+        assertThat(reservable(1)).isEqualTo(60);
+        assertThat(reservable(2)).isEqualTo(50);
+        assertThat(data.version(date)).isZero();
+        assertThat(redis.opsForValue().get(StockKeys.stock(date, 1))).isEqualTo("5");
+        assertThat(redis.opsForValue().get(StockKeys.stock(date, 2))).isEqualTo("40");    // 같이 줄이려던 빵도 그대로
     }
 
     @Test

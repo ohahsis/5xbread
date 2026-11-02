@@ -40,6 +40,11 @@ fivexbread:
   store:
     open-time: "08:00"             # 부록 B 영업시간. 픽업 시각은 이 시각 이상
     close-time: "21:00"            # 픽업 시각은 이 시각 미만
+  reservation:
+    daily-limit-per-member: 3     # 부록 B: 판매일별 1인 최대 예약 건수
+    max-total-quantity: 20        # Q-07: 예약 1건 최대 총수량
+    rate-limit-per-second: 5      # N-23: 회원당 초당 예약 요청
+    idempotency-ttl: 24h          # N-06: Idempotency 결과 보관
   signup:
     daily-limit-per-ip: 10        # AU-02, 부록 B
     terms-version: "v1"           # 서비스 이용약관

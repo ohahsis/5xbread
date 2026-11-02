@@ -7,6 +7,7 @@ import com.fivexbread.auth.JwtProvider;
 import com.fivexbread.member.Role;
 import com.fivexbread.support.IntegrationTestSupport;
 import com.fivexbread.support.MutableClock;
+import com.fivexbread.support.MutableClockConfig;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -16,11 +17,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -32,18 +30,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * 손님용 판매일·빵 목록·픽업 시간대 조회 (C-02, 13-4). 모두 공개 API 라 기본 요청은 토큰 없이 보낸다.
  * 시드 빵 1·2·3(판매 중)을 쓰고, 날짜는 시드와 겹치지 않는 15일 뒤. 상태 경계는 MutableClock 으로 시각을 옮겨 확인한다.
  */
-@Import(SaleDateQueryApiTest.ClockOverride.class)
+@Import(MutableClockConfig.class)
 class SaleDateQueryApiTest extends IntegrationTestSupport {
-
-    @TestConfiguration
-    static class ClockOverride {
-
-        @Bean
-        @Primary
-        MutableClock mutableClock() {
-            return new MutableClock();
-        }
-    }
 
     @Autowired
     TestRestTemplate restTemplate;
