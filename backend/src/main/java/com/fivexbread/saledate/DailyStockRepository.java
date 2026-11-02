@@ -36,6 +36,14 @@ public interface DailyStockRepository extends JpaRepository<DailyStock, Long> {
             """, nativeQuery = true)
     int increaseReserved(@Param("saleDate") LocalDate saleDate, @Param("breadId") long breadId, @Param("qty") int qty);
 
+    /** 취소한 수량을 되돌린다 (C-06·A-08, R-15). 0이면 예약 수량보다 많이 빼려는 것 = 데이터 불일치 */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE daily_stock SET reserved_qty = reserved_qty - :qty
+            WHERE sale_date = :saleDate AND bread_id = :breadId AND reserved_qty >= :qty
+            """, nativeQuery = true)
+    int decreaseReserved(@Param("saleDate") LocalDate saleDate, @Param("breadId") long breadId, @Param("qty") int qty);
+
     /** Redis 재고 키 적재 기준: 잔여 = 예약 가능 총량 − 예약 수량 (decisions.md 6장 "C-04 Redis 재고 적재") */
     @Query(value = """
             SELECT bread_id AS breadId, reservable_qty - reserved_qty AS quantity

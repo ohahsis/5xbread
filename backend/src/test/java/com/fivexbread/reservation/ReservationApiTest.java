@@ -7,6 +7,7 @@ import com.fivexbread.auth.JwtProvider;
 import com.fivexbread.member.Role;
 import com.fivexbread.saledate.SaleDateTestData;
 import com.fivexbread.saledate.StockKeys;
+import com.fivexbread.support.Concurrently;
 import com.fivexbread.support.IntegrationTestSupport;
 import com.fivexbread.support.MutableClock;
 import com.fivexbread.support.MutableClockConfig;
@@ -19,11 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -396,22 +392,7 @@ class ReservationApiTest extends IntegrationTestSupport {
 
     private static List<ResponseEntity<JsonNode>> concurrently(List<Callable<ResponseEntity<JsonNode>>> tasks,
                                                                int threads) throws Exception {
-        ExecutorService executor = Executors.newFixedThreadPool(threads);
-        CountDownLatch start = new CountDownLatch(1);
-        List<Future<ResponseEntity<JsonNode>>> futures = new ArrayList<>();
-        for (Callable<ResponseEntity<JsonNode>> task : tasks) {
-            futures.add(executor.submit(() -> {
-                start.await();
-                return task.call();
-            }));
-        }
-        start.countDown();
-        List<ResponseEntity<JsonNode>> responses = new ArrayList<>();
-        for (Future<ResponseEntity<JsonNode>> future : futures) {
-            responses.add(future.get(120, TimeUnit.SECONDS));
-        }
-        executor.shutdown();
-        return responses;
+        return Concurrently.run(tasks, threads);
     }
 
     private static List<HttpStatus> statuses(List<ResponseEntity<JsonNode>> responses) {
