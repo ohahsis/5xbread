@@ -2,3 +2,5 @@
 fivexbread:
   jwt:
     secret: test-only-jwt-secret-0123456789abcdef0123456789
+  pickup:
+    secret: test-only-pickup-secret-0123456789abcdef012345
