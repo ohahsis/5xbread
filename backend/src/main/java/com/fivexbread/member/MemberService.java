@@ -51,6 +51,12 @@ public class MemberService {
         return memberRepository.existsByRole(Role.ADMIN);
     }
 
+    /** @return 저장했는지. false 면 currentHash 를 읽은 뒤 다른 요청이 비밀번호를 바꾼 것 */
+    @Transactional
+    public boolean changePassword(long memberId, String currentHash, String newHash) {
+        return memberRepository.changePassword(memberId, currentHash, newHash) == 1;
+    }
+
     /**
      * 사장님 초기 계정 생성 (decisions.md 2장). ADMIN 이 이미 있으면 false.
      * 번호는 INSERT 전에 확인한다. 중복 키 오류가 나면 Hibernate 가 번호 원문을 ERROR 로그에 남기기 때문 (AU-10)

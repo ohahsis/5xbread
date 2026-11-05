@@ -95,6 +95,11 @@ public class LoginFailureCounter {
         redisTemplate.delete(keys(phone));
     }
 
+    /** 사장님이 임시 비밀번호를 발급했을 때. 잊어버려서 잠긴 손님이 매장에서 바로 로그인할 수 있어야 한다 (C-09) */
+    public void reset(String phone) {
+        redisTemplate.delete(keys(phone));
+    }
+
     // PTTL(ms)을 초 단위로 올림. TTL 은 반올림이라 끝에 0이 나옴
     private static BusinessException locked(long lockTtlMillis) {
         return BusinessException.withRetryAfter(ErrorCode.ACCOUNT_LOCKED, Math.max(1, (lockTtlMillis + 999) / 1000));

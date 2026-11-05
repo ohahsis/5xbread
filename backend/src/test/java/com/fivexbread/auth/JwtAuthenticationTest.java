@@ -52,7 +52,8 @@ class JwtAuthenticationTest {
     void 정상_토큰이면_회원ID_권한이_SecurityContext에_들어간다() throws Exception {
         String token = jwtProvider.issue(7L, Role.CUSTOMER, true);
 
-        withBearer(token, "/api/v1/members/me")
+        // pcr 토큰은 비밀번호 변경 같은 허용 경로만 지나간다 (PasswordChangeRequiredFilterTest)
+        mockMvc.perform(put("/api/v1/members/me/password").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.memberId").value(7))
                 .andExpect(jsonPath("$.role").value("CUSTOMER"))
@@ -147,6 +148,11 @@ class JwtAuthenticationTest {
 
     @RestController
     static class TestController {
+
+        @PutMapping("/api/v1/members/me/password")
+        MeResponse password(@AuthenticationPrincipal AuthMember member, Authentication authentication) {
+            return me(member, authentication);
+        }
 
         @GetMapping("/api/v1/members/me")
         MeResponse me(@AuthenticationPrincipal AuthMember member,
