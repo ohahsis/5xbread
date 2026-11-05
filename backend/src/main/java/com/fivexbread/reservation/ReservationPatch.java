@@ -24,8 +24,9 @@ record ReservationPatch(ReservationStatus status, String cancelReason) {
 
     // 손님은 취소만 (13-2 1단계)
     private static final Set<ReservationStatus> CUSTOMER_STATUSES = Set.of(ReservationStatus.CANCELED);
-    // 사장님: 직권 취소(A-08). A-06 수령에서 PICKED_UP 을 더한다
-    private static final Set<ReservationStatus> ADMIN_STATUSES = Set.of(ReservationStatus.CANCELED);
+    // 사장님: 직권 취소(A-08), 수령(A-06)
+    private static final Set<ReservationStatus> ADMIN_STATUSES =
+            Set.of(ReservationStatus.CANCELED, ReservationStatus.PICKED_UP);
 
     static ReservationPatch customer(Map<String, Object> body) {
         List<FieldViolation> violations = new ArrayList<>();
@@ -42,6 +43,8 @@ record ReservationPatch(ReservationStatus status, String cancelReason) {
         String reason = null;
         if (status == ReservationStatus.CANCELED) {
             reason = cancelReason(body.get(CANCEL_REASON), violations);
+        } else if (body.containsKey(CANCEL_REASON)) {        // 수령에 사유를 보내면 무시하지 않고 알린다
+            violations.add(new FieldViolation(CANCEL_REASON, "NotAllowed", "취소할 때만 보낼 수 있습니다"));
         }
         throwIfAny(violations);
         return new ReservationPatch(status, reason);
