@@ -141,6 +141,18 @@ class PasswordChangeApiTest extends IntegrationTestSupport {
     }
 
     @Test
+    void pcr_상태면_내_예약_목록이_403이고_변경_후_받은_토큰으로_200() {
+        jdbcTemplate.update("UPDATE member SET must_change_password = TRUE WHERE id = ?", memberId);
+        String pcrToken = accessToken(login(PASSWORD));
+
+        assertCode(myReservations(pcrToken), HttpStatus.FORBIDDEN, "PASSWORD_CHANGE_REQUIRED");
+
+        String newToken = accessToken(change(pcrToken, PASSWORD, NEW_PASSWORD));
+
+        assertThat(myReservations(newToken).getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
     void 현재_비밀번호가_틀리면_422이고_바뀌지_않으며_토큰도_그대로다() {
         ResponseEntity<JsonNode> here = login(PASSWORD);
 
@@ -298,6 +310,13 @@ class PasswordChangeApiTest extends IntegrationTestSupport {
 
     private String storedHash() {
         return jdbcTemplate.queryForObject("SELECT password_hash FROM member WHERE id = ?", String.class, memberId);
+    }
+
+    private ResponseEntity<JsonNode> myReservations(String accessToken) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(accessToken);
+        return restTemplate.exchange("/api/v1/members/me/reservations", HttpMethod.GET, new HttpEntity<>(headers),
+                JsonNode.class);
     }
 
     private ResponseEntity<JsonNode> reserve(String accessToken, LocalDate date, long slot) {
