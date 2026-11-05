@@ -27,6 +27,7 @@ public class ReservationCancelService {
 
     private final ReservationRepository reservationRepository;
     private final DailyStockRepository dailyStockRepository;
+    private final ReservationItems reservationItems;
     private final JdbcTemplate jdbcTemplate;
     private final Clock clock;
 
@@ -56,12 +57,7 @@ public class ReservationCancelService {
         }
 
         // 예약(C-04)과 같은 breadId 오름차순으로 행을 잠가 순환 대기(데드락)가 없다
-        List<ItemResponse> items = jdbcTemplate.query("""
-                SELECT i.bread_id, b.name, i.quantity, i.unit_price
-                FROM reservation_item i JOIN bread b ON b.id = i.bread_id
-                WHERE i.reservation_id = ? ORDER BY i.bread_id""",
-                (rs, row) -> new ItemResponse(rs.getLong(1), rs.getString(2), rs.getInt(3), rs.getInt(4)),
-                reservationId);
+        List<ItemResponse> items = reservationItems.of(reservationId);
         Map<Long, Integer> quantities = new LinkedHashMap<>();
         for (ItemResponse item : items) {
             if (dailyStockRepository.decreaseReserved(reservation.getSaleDate(), item.breadId(), item.quantity()) == 0) {
@@ -77,8 +73,7 @@ public class ReservationCancelService {
                 reservationId, ReservationStatus.RESERVED.name(), ReservationStatus.CANCELED.name(),
                 cancellation.canceledBy(), cancellation.canceledAt());
 
-        ReservationResponse response = ReservationResponse.of(reservation, ReservationStatus.CANCELED,
-                cancellation.canceledAt(), items);
+        ReservationResponse response = ReservationResponse.canceled(reservation, cancellation.canceledAt(), items);
         return new Canceled(response, reservation.getSaleDate(), reservation.getMemberId(), quantities);
     }
 

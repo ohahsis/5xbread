@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 예약 생성·취소 (C-04·C-06, 10장 손님 API). 로그인 필수 */
+/** 예약 생성·취소·픽업 QR (C-04·C-06·C-07, 10장 손님 API). 로그인 필수 */
 @RestController
 @RequestMapping("/api/v1/reservations")
 @RequiredArgsConstructor
@@ -33,6 +34,7 @@ public class ReservationController {
 
     private final ReservationFacade reservationFacade;
     private final ReservationCancelFacade reservationCancelFacade;
+    private final PickupCodeService pickupCodeService;
 
     /** 형식 검증(@Valid 400) → Idempotency-Key 없음 428·형식 400 → Facade. 같은 키 재요청도 처음과 같은 201 */
     @PostMapping
@@ -49,6 +51,12 @@ public class ReservationController {
                                      @RequestBody Map<String, Object> body) {
         ReservationPatch.customer(body);                    // 형식 검증만. 손님은 CANCELED 하나뿐
         return reservationCancelFacade.cancel(reservationId, ReservationActor.customer(member.memberId()), null);
+    }
+
+    /** 픽업 QR 서명 토큰 (C-07, 13-9 1단계). 본인 예약만, 남의 예약은 404 */
+    @GetMapping("/{reservationId}/pickup-code")
+    public PickupCodeResponse pickupCode(@AuthenticationPrincipal AuthMember member, @PathVariable long reservationId) {
+        return pickupCodeService.issue(reservationId, member.memberId());
     }
 
     private static String key(String idempotencyKey) {

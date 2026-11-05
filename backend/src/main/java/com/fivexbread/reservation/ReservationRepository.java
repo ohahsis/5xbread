@@ -29,6 +29,18 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
                          @Param("canceledBy") long canceledBy, @Param("reason") String reason);
 
     /**
+     * 수령 확정 (13-9 3단계, A-06). RESERVED 이고 판매일이 오늘인 예약만 1행. 손님 취소·직권 취소와 같은 status 조건이라
+     * 동시에 와도 먼저 실행한 하나만 바뀐다 (N-07, E-09). 0이면 원인을 Reservation.pickUpRejection 으로 가린다.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE reservation SET status = 'PICKED_UP', picked_up_at = :pickedUpAt
+            WHERE id = :id AND status = 'RESERVED' AND sale_date = :today
+            """, nativeQuery = true)
+    int pickUpIfReserved(@Param("id") long id, @Param("pickedUpAt") LocalDateTime pickedUpAt,
+                         @Param("today") LocalDate today);
+
+    /**
      * 그날 손님의 예약 건수(취소 제외). Redis user_qty 의 건수 필드를 다시 채울 때의 기준으로만 쓴다 (decisions.md 6장).
      * ix_resv_member_status (member_id, status, sale_date) 커버링.
      */

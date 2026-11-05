@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Map;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -19,7 +20,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 /**
- * V1 reservation 테이블 (C-04, C-06). 수령 컬럼은 A-06 에서 매핑한다.
+ * V1 reservation 테이블 (C-04, C-06, A-06).
  * 예약 항목은 IDENTITY 라 JPA batch insert 가 안 돼 JdbcTemplate 로 넣는다 (13-1 어필 포인트).
  */
 @Entity
@@ -80,6 +81,10 @@ public class Reservation {
     @Column(insertable = false, updatable = false, length = 100)
     private String cancelReason;
 
+    // 수령 시각도 ReservationRepository.pickUpIfReserved 로만 바꾼다
+    @Column(insertable = false, updatable = false)
+    private LocalDateTime pickedUpAt;
+
     public static Reservation create(String reservationNo, long memberId, String phoneLast4, LocalDate saleDate,
                                      long pickupSlotId, LocalDateTime pickupAt, int totalPrice,
                                      String idempotencyKey, LocalDateTime now) {
@@ -115,6 +120,22 @@ public class Reservation {
 
     /** 취소 판단 결과. 조건부 UPDATE·이력·응답에 그대로 쓴다 */
     public record Cancellation(LocalDateTime canceledAt, long canceledBy, String reason) {
+    }
+
+    /**
+     * 수령 조건부 UPDATE 가 0행일 때, 다시 읽은 예약으로 원인을 가린다 (13-9 3단계).
+     * 상태가 먼저: 이미 수령·취소·노쇼면 409(currentStatus), RESERVED 인데 판매일이 오늘이 아니면 422(saleDate).
+     *
+     * @return 둘 다 아니면(조건을 모두 만족하면) null. 수령할 수 있는 예약인데 0행이었다는 뜻이라 호출한 쪽이 데이터 오류로 다룬다
+     */
+    public BusinessException pickUpRejection(LocalDate today) {
+        if (status != ReservationStatus.RESERVED) {
+            return new BusinessException(ErrorCode.INVALID_STATUS_TRANSITION, null, Map.of("currentStatus", status));
+        }
+        if (!saleDate.equals(today)) {
+            return new BusinessException(ErrorCode.PICKUP_DATE_MISMATCH, null, Map.of("saleDate", saleDate));
+        }
+        return null;
     }
 
     public LocalDateTime cancelDeadline() {

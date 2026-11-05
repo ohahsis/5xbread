@@ -16,6 +16,7 @@ public record ReservationResponse(
         OffsetDateTime pickupAt,
         OffsetDateTime cancelDeadline,
         OffsetDateTime canceledAt,
+        OffsetDateTime pickedUpAt,
         List<ItemResponse> items,
         int totalPrice
 ) {
@@ -25,18 +26,27 @@ public record ReservationResponse(
     }
 
     static ReservationResponse of(Reservation reservation, List<ItemResponse> items) {
-        return of(reservation, reservation.getStatus(), reservation.getCanceledAt(), items);
+        return of(reservation, reservation.getStatus(), reservation.getCanceledAt(), reservation.getPickedUpAt(), items);
     }
 
-    /** 조건부 UPDATE 로 상태를 바꾼 직후. 읽어 둔 엔티티는 옛 상태라 바뀐 값을 따로 받는다 */
-    static ReservationResponse of(Reservation reservation, ReservationStatus status, LocalDateTime canceledAt,
-                                  List<ItemResponse> items) {
+    /** 조건부 UPDATE 로 취소한 직후. 읽어 둔 엔티티는 옛 상태라 바뀐 값을 따로 받는다 */
+    static ReservationResponse canceled(Reservation reservation, LocalDateTime canceledAt, List<ItemResponse> items) {
+        return of(reservation, ReservationStatus.CANCELED, canceledAt, null, items);
+    }
+
+    /** 조건부 UPDATE 로 수령 처리한 직후 */
+    static ReservationResponse pickedUp(Reservation reservation, LocalDateTime pickedUpAt, List<ItemResponse> items) {
+        return of(reservation, ReservationStatus.PICKED_UP, null, pickedUpAt, items);
+    }
+
+    private static ReservationResponse of(Reservation reservation, ReservationStatus status, LocalDateTime canceledAt,
+                                          LocalDateTime pickedUpAt, List<ItemResponse> items) {
         return new ReservationResponse(reservation.getId(), reservation.getReservationNo(), status,
                 reservation.getSaleDate(), toOffset(reservation.getPickupAt()), toOffset(reservation.cancelDeadline()),
-                canceledAt == null ? null : toOffset(canceledAt), items, reservation.getTotalPrice());
+                toOffset(canceledAt), toOffset(pickedUpAt), items, reservation.getTotalPrice());
     }
 
     static OffsetDateTime toOffset(LocalDateTime time) {
-        return time.atZone(KST).toOffsetDateTime();
+        return time == null ? null : time.atZone(KST).toOffsetDateTime();
     }
 }

@@ -13,6 +13,7 @@ x-app: &app
     DB_PASSWORD: ${DB_PASSWORD:?.env 에 DB_PASSWORD 필요}
     REDIS_HOST: redis
     JWT_SECRET: ${JWT_SECRET:?.env 에 JWT_SECRET 필요}
+    PICKUP_SECRET: ${PICKUP_SECRET:?.env 에 PICKUP_SECRET 필요}
     ADMIN_INITIAL_PHONE: ${ADMIN_INITIAL_PHONE:-}
     ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-}
   mem_limit: 768m                 # 앱 1개당. 힙은 이 중 75% (Dockerfile MaxRAMPercentage)
