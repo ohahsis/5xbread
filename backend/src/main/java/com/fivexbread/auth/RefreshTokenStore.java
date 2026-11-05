@@ -45,18 +45,24 @@ public class RefreshTokenStore {
             """, Long.class);
 
     /*
-     * 반환: 1 교체 허용 / 0 없음(만료·위조·로그아웃) / 2 재사용(이미 교체된 토큰)
+     * 반환: 1 교체함 / 0 없음(만료·위조·로그아웃) / 2 재사용(이미 교체된 토큰)
      * GETDEL 로 꺼내며 지우므로 같은 토큰으로 동시에 여러 번 와도 1은 한 건뿐이다.
+     * 꺼내기와 새 토큰 저장을 한 스크립트에서 한다. 나눠서 하면 그 사이에 비밀번호 변경·임시 비밀번호의 전체 폐기가 끼어들어
+     * 폐기 뒤에 새 토큰이 저장되고, 폐기된 기기가 살아남는다 (decisions.md 6장).
      */
-    private static final RedisScript<Long> CONSUME = RedisScript.of("""
-            -- KEYS[1]=refresh:{memberId}:{tokenId}, KEYS[2]=refresh:index:{memberId}, KEYS[3]=refresh:used:{memberId}:{tokenId}
-            -- ARGV[1]=tokenId
+    private static final RedisScript<Long> ROTATE = RedisScript.of("""
+            -- KEYS[1]=refresh:{memberId}:{tokenId}, KEYS[2]=refresh:index:{memberId},
+            -- KEYS[3]=refresh:used:{memberId}:{tokenId}, KEYS[4]=refresh:{memberId}:{새 tokenId}
+            -- ARGV[1]=tokenId, ARGV[2]=새 tokenId, ARGV[3]=TTL(초)
             local ttl = redis.call('PTTL', KEYS[1])
             if redis.call('GETDEL', KEYS[1]) then
                 redis.call('SREM', KEYS[2], ARGV[1])
                 if ttl > 0 then
                     redis.call('SET', KEYS[3], '1', 'PX', ttl)
                 end
+                redis.call('SET', KEYS[4], '1', 'EX', ARGV[3])
+                redis.call('SADD', KEYS[2], ARGV[2])
+                redis.call('EXPIRE', KEYS[2], ARGV[3])
                 return 1
             end
             if redis.call('EXISTS', KEYS[3]) == 1 then
@@ -80,9 +86,7 @@ public class RefreshTokenStore {
 
     /** 새 토큰을 만들어 저장하고 쿠키에 담을 원문을 돌려준다 */
     public String issue(long memberId) {
-        byte[] bytes = new byte[SECRET_BYTES];  // 32 바이트만큼
-        RANDOM.nextBytes(bytes);    // JWT 를 만드는 대신 SecureRandom 으로 32바이트를 뽑는다.
-        String secret = BASE64.encodeToString(bytes);   // 바이트를 문자로 바꿈
+        String secret = newSecret();
         String tokenId = hash(secret);  // 느린 Bcrypt 대신 같은 입력이 같은 조회가 되는 SHA-256 사용
         redisTemplate.execute(ISSUE, List.of(tokenKey(memberId, tokenId), indexKey(memberId)),
                 tokenId, String.valueOf(properties.refreshTokenTtl().toSeconds()));
@@ -90,22 +94,24 @@ public class RefreshTokenStore {
     }
 
     /**
-     * 토큰을 꺼내며 지운다(회전). 이미 교체된 토큰이 다시 오면 탈취로 보고 그 회원의 토큰을 전부 폐기한다.
+     * 토큰을 꺼내 지우고 새 토큰으로 바꾼다(회전). 이미 교체된 토큰이 다시 오면 탈취로 보고 그 회원의 토큰을 전부 폐기한다.
      *
-     * @return 토큰 주인의 회원 ID
+     * @return 토큰 주인과 쿠키에 담을 새 토큰 원문
      * @throws BusinessException 형식 오류·만료·위조·재사용이면 401
      */
-    public long consume(String refreshToken) {
+    public RotatedToken rotate(String refreshToken) {
         ParsedToken token = parse(refreshToken);
         if(token == null) {
             throw new BusinessException(ErrorCode.UNAUTHENTICATED);
         }
-        Long result = redisTemplate.execute(CONSUME,
+        String newSecret = newSecret();
+        String newTokenId = hash(newSecret);
+        Long result = redisTemplate.execute(ROTATE,
                 List.of(tokenKey(token.memberId(), token.tokenId()), indexKey(token.memberId()),
-                        usedKey(token.memberId(), token.tokenId())),
-                token.tokenId());
-        if (result != null && result == 1) {    // 정상적으로 하나의 사용 요청에 대한 memberId 반환
-            return token.memberId();
+                        usedKey(token.memberId(), token.tokenId()), tokenKey(token.memberId(), newTokenId)),
+                token.tokenId(), newTokenId, String.valueOf(properties.refreshTokenTtl().toSeconds()));
+        if (result != null && result == 1) {    // 정상적으로 하나의 사용 요청에 대한 새 토큰 반환
+            return new RotatedToken(token.memberId(), token.memberId() + "." + newSecret);
         }
         if (result != null && result == 2) {    // 네트워크 재시도 혹은 공격으로 인한 이중 시도(재사용) 감지, 토큰 전부 폐기
             log.warn("이미 교체된 Refresh Token 재사용. 회원 토큰 전부 폐기 memberId={}", token.memberId());
@@ -127,6 +133,12 @@ public class RefreshTokenStore {
     /** 회원의 Refresh Token 전부 폐기. 재사용 감지, C-09·A-09 임시 비밀번호, 비밀번호 변경 때 쓴다 */
     public void revokeAll(long memberId) {
         redisTemplate.execute(REVOKE_ALL, List.of(indexKey(memberId)), tokenKey(memberId, ""));
+    }
+
+    private static String newSecret() {
+        byte[] bytes = new byte[SECRET_BYTES];  // 32 바이트만큼
+        RANDOM.nextBytes(bytes);    // JWT 를 만드는 대신 SecureRandom 으로 32바이트를 뽑는다.
+        return BASE64.encodeToString(bytes);    // 바이트를 문자로 바꿈
     }
 
     // {memberId}.{secret} 형식이 아니면 null. Redis 를 조회하지 않고 거른다
@@ -170,5 +182,14 @@ public class RefreshTokenStore {
     }
 
     private record ParsedToken(long memberId, String tokenId) {
+    }
+
+    /** 회전 결과. refreshToken 은 쿠키에 담을 원문이라 로그·예외 메시지에 남지 않게 가린다 */
+    public record RotatedToken(long memberId, String refreshToken) {
+
+        @Override
+        public String toString() {
+            return "RotatedToken[memberId=%d]".formatted(memberId);
+        }
     }
 }

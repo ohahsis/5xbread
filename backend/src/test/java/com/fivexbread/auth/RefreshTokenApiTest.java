@@ -3,7 +3,10 @@ package com.fivexbread.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fivexbread.common.BusinessException;
+import com.fivexbread.common.ErrorCode;
 import com.fivexbread.member.Role;
+import com.fivexbread.support.Concurrently;
 import com.fivexbread.support.IntegrationTestSupport;
 import java.util.ArrayList;
 import java.util.List;
@@ -52,6 +55,9 @@ class RefreshTokenApiTest extends IntegrationTestSupport {
 
     @Autowired
     JwtProvider jwtProvider;
+
+    @Autowired
+    RefreshTokenStore refreshTokenStore;
 
     private long memberId;
 
@@ -174,6 +180,29 @@ class RefreshTokenApiTest extends IntegrationTestSupport {
 
         assertThat(statuses).filteredOn(HttpStatus.OK::equals).hasSize(1);
         assertThat(statuses).filteredOn(HttpStatus.UNAUTHORIZED::equals).hasSize(requests - 1);
+    }
+
+    @Test
+    void 회전과_전체_폐기가_동시에_일어나도_폐기_뒤에_살아남는_토큰이_없다() throws Exception {
+        for (int i = 0; i < 300; i++) {
+            String token = refreshTokenStore.issue(memberId);
+
+            Concurrently.run(List.<Callable<Boolean>>of(
+                    () -> {
+                        try {
+                            refreshTokenStore.rotate(token);
+                        } catch (BusinessException e) {
+                            assertThat(e.getErrorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED);   // 폐기가 먼저 끝남
+                        }
+                        return true;
+                    },
+                    () -> {
+                        refreshTokenStore.revokeAll(memberId);
+                        return true;
+                    }), 2);
+
+            assertThat(redisTemplate.keys(RefreshTokenStore.tokenKey(memberId, "*"))).isEmpty();
+        }
     }
 
     private static List<HttpStatus> concurrently(int requests, Callable<ResponseEntity<JsonNode>> call)

@@ -45,6 +45,9 @@ public enum ErrorCode {
     INVALID_STOCK_ROWS(HttpStatus.UNPROCESSABLE_ENTITY, "수량 설정에 맞지 않는 행이 있습니다"),        // errors[]: 틀린 행 전부 (A-02)
     INVALID_PICKUP_SLOT(HttpStatus.UNPROCESSABLE_ENTITY, "이 판매일의 픽업 시간대가 아닙니다"),         // C-04, decisions.md 6장
     BREAD_NOT_AVAILABLE(HttpStatus.UNPROCESSABLE_ENTITY, "이 판매일에 예약할 수 없는 빵이 있습니다"),   // errors[]: breadId 전부 (C-04)
+    INVALID_CURRENT_PASSWORD(HttpStatus.UNPROCESSABLE_ENTITY, "현재 비밀번호가 틀렸습니다"),            // C-10
+    PASSWORD_CONTAINS_PHONE(HttpStatus.UNPROCESSABLE_ENTITY, "비밀번호에 휴대폰 번호를 포함할 수 없습니다"),       // C-10: 번호는 서버만 알아 형식 검증(400)이 아니다
+    PASSWORD_SAME_AS_CURRENT(HttpStatus.UNPROCESSABLE_ENTITY, "현재 비밀번호와 다른 비밀번호를 입력해 주세요"),   // C-10
     IDEMPOTENCY_KEY_MISMATCH(HttpStatus.UNPROCESSABLE_ENTITY, "같은 Idempotency-Key 로 다른 요청을 보냈습니다"),   // N-06
     PICKUP_DATE_MISMATCH(HttpStatus.UNPROCESSABLE_ENTITY, "오늘 픽업할 예약이 아닙니다"),             // saleDate: 그 예약의 판매일 (A-06)
     INVALID_PICKUP_CODE(HttpStatus.UNPROCESSABLE_ENTITY, "유효하지 않은 QR입니다"),                  // 형식·서명·만료를 구분하지 않음 (C-07)
