@@ -1,0 +1,12 @@
+# application-docker.yml (compose.full.yaml 의 app1~3: 앱 3개 + Nginx)
+# local 프로필을 피하려고 둔다. 기본 프로필이 local 이라 아무것도 켜지 않으면 local 의 SQL 바인딩 TRACE 로그(전화번호 원문)가 켜진다.
+# 접속 정보·비밀 값은 모두 환경 변수(DB_HOST, REDIS_HOST, JWT_SECRET 등)로 받는다
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true             # /actuator/health/readiness: compose healthcheck 가 이것으로 준비 완료를 본다
+
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 20s   # graceful shutdown: 하던 요청을 끝낼 시간 (compose stop 기본 10초보다 길게 stop_grace_period 를 준다)
