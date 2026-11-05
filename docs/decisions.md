@@ -180,7 +180,7 @@ MySQL 컨테이너는 `--default-time-zone=+09:00`, 문자셋은 `utf8mb4`로 �
 | 앱 3개 docker 프로필 | 8장 인프라 표 (프로필 언급 없음), `application.yml`의 기본 프로필은 `local` | 컨테이너 앱은 `SPRING_PROFILES_ACTIVE=docker`로 띄운다. 아무 프로필도 켜지 않으면 기본값 `local`이 켜져 SQL 바인딩 TRACE 로그(전화번호 원문)가 남는다. `application-docker.yml`은 readiness 프로브(`/actuator/health/readiness`, compose healthcheck가 사용)와 종료 대기 20초만 둔다. 접속 정보·비밀 값은 모두 환경 변수 |
 | 부하 테스트 데이터 | 14장 "Flyway가 ... 테스트 손님 1,000명을 넣음", 2장 "local 프로필 전용 마이그레이션 위치" | **정의서·2장 초안과 다르게** Flyway가 아니라 `load/seed.sql`로 넣는다. 부하 테스트는 실행마다 같은 시작 상태(예약 0, 지금 열려 있는 판매일)가 필요한데, 마이그레이션은 한 번만 적용되고 적용한 날짜에 고정된다. 또 프로필별 location으로 넣으면 그 DB를 location 없이 띄울 때 "적용됐지만 파일 없음"으로 Flyway 검증이 실패한다. 스크립트는 10일 뒤 판매일(V2 시드의 1~7일 뒤와 겹치지 않음)의 예약·재고를 지우고 다시 넣으며, `run.sh`가 그 날의 Redis 키도 지운다. 손님 번호는 실제로 배정되지 않는 010-0000-0001~1000, 비밀번호는 공통(BCrypt 해시만 저장) |
 | 부하 테스트 도구 | 8장 "k6 (로컬 설치 또는 컨테이너)", 14장 예시 `setup()`에서 1,000명 로그인 | `grafana/k6` 컨테이너를 compose의 `load` 프로필 서비스로 둔다(같은 네트워크에서 `http://nginx` 호출, 로컬 설치 불필요). 로그인은 실제 API로 하되 `setup()`이 아니라 각 VU가 직접 한다. `setup()`이 돌려준 토큰 배열은 VU 1,000개에 각각 복사돼 메모리를 많이 쓰고, 순차 로그인은 BCrypt 때문에 느리다. VU는 로그인 후 시작 60초 시점까지 기다렸다가 함께 예약해, 예약 요청만 한순간에 몰리게 한다. 테스트용 인증 우회는 만들지 않는다 |
-| Nginx 재시도 | 14장 예시 `proxy_next_upstream error timeout` | 그대로 두고 `non_idempotent`는 넣지 않는다. Nginx는 POST·PATCH를 앱에 보낸 뒤에는 다음 앱으로 다시 보내지 않으므로, 연결부터 실패한 요청만 다른 앱으로 가고 처리 중 끊긴 예약은 502/504로 끝난다(재시도는 손님의 Idempotency-Key가 막음). `http_503`은 넣지 않는다(Redis 장애 503은 모든 앱이 같음). `max_fails=1 fail_timeout=10s`, 연결 2초·응답 30초. `X-Forwarded-For`는 이어 붙이지 않고 `$remote_addr`로 덮어 가입 IP 제한(AU-02) 우회를 막는다 |
+| Nginx 재시도 | 14장 예시 `proxy_next_upstream error timeout` | 그대로 두고 `non_idempotent`는 넣지 않는다. Nginx는 POST·PATCH를 앱에 보낸 뒤에는 다음 앱으로 다시 보내지 않으므로, 연결부터 실패한 요청만 다른 앱으로 가고 처리 중 끊긴 예약은 502/504로 끝난다(재시도는 손님의 Idempotency-Key가 막음). `http_503`은 넣지 않는다(Redis 장애 503은 모든 앱이 같음). `max_fails=1 fail_timeout=10s`, 연결 2초·응답 30초. `X-Forwarded-For`는 이어 붙이지 않고 `$remote_addr`로 덮어 가입 IP 제한(AU-02) 우회를 막는다. 처리한 앱을 알려 주는 `X-Upstream`(앱 내부 IP)은 손님용 80에는 붙이지 않고, 호스트에 공개하지 않는 8081 포트로 들어온 요청(compose 네트워크 안의 k6)에만 붙인다. 출발지 IP로 나누지 않는 이유는 Docker userland-proxy를 거치면 바깥 요청도 게이트웨이 IP로 보이기 때문 |
 | 기본 사용자 비활성화 | AU-10 로그 마스킹 | Spring Security의 `UserDetailsServiceAutoConfiguration`을 끈다. 켜 두면 쓰지 않는 기본 사용자를 만들면서 생성 비밀번호를 시작 로그에 원문으로 남긴다(앱 3개 컨테이너 로그에서 발견) |
 
 ---
@@ -211,4 +211,5 @@ MySQL 컨테이너는 `--default-time-zone=+09:00`, 문자셋은 `utf8mb4`로 �
 | 2026-10-29 | 6장: C-04 Idempotency 저장·하루 3건·DB 조건부 UPDATE 0행(정의서와 다르게 409)·업무 규칙 오류·Redis 키와 예약번호, A-02 Redis 반영 순서 추가 |
 | 2026-11-02 | 6장: C-06 취소 요청 형식·순서·Redis 복구와 재적재(`gen` 세대)·outbox 미사용, A-08 직권 취소 해석 추가 |
 | 2026-11-02 | 4장: 트랜잭셔널 아웃박스를 3단계에 추가(2차에서 당김), 미루는 순서 변경, C-06의 N-07 테스트를 A-06으로. 단순화 표의 아웃박스 행 갱신 |
+| 2026-11-06 | 6장: Nginx 재시도 행에 `X-Upstream`을 내부 포트 8081에만 붙이는 결정 추가 |
 | 2026-11-02 | 2장: 앱 3개 구성, 테스트 손님 1,000명(마이그레이션 → `load/seed.sql`)을 실제 구성에 맞춤. 4장: 1단계 완료 표시. 6장: 앱 3개 docker 프로필, 부하 테스트 데이터(정의서와 다르게)·도구, Nginx 재시도, 기본 사용자 비활성화 추가 |
