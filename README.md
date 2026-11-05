@@ -9,3 +9,13 @@
 3. 손님 화면 `http://localhost`, 사장님 화면 `http://localhost/admin`, API 문서 `http://localhost/swagger-ui`
 4. 모니터링이 필요하면 `docker compose --profile monitoring up -d` → Grafana `http://localhost:3000`
 5. 부하 테스트 `k6 run load/reserve.js`
+
+### 앱 3개로 실행하기
+
+MySQL·Redis·app1~app3·Nginx(`http://localhost`)를 띄우고, 손님 1,000명이 같은 빵을 동시에 예약한 뒤 DB·Redis 값을 확인합니다. `.env`가 먼저 채워져 있어야 합니다.
+
+```bash
+docker compose -f compose.full.yaml up -d --build --wait
+./load/run.sh
+docker compose -f compose.full.yaml down        # 데이터까지 지우려면 -v
+```
