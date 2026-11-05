@@ -11,7 +11,7 @@ import exec from 'k6/execution';
 import { check, sleep } from 'k6';
 import { Counter } from 'k6/metrics';
 
-const BASE_URL = __ENV.BASE_URL || 'http://nginx';
+const BASE_URL = __ENV.BASE_URL || 'http://nginx:8081';   // 8081: X-Upstream 을 붙여 주는 내부 포트 (nginx.conf)
 const SALE_DATE = __ENV.SALE_DATE;
 const PICKUP_SLOT_ID = Number(__ENV.PICKUP_SLOT_ID);
 const BREAD_ID = Number(__ENV.BREAD_ID || 1);
