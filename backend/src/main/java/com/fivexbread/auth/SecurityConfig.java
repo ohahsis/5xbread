@@ -34,6 +34,8 @@ public class SecurityConfig {
                 .logout(AbstractHttpConfigurer::disable)          // 로그아웃은 DELETE /auth/tokens/current
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))   // 앱 3개라 서버 세션을 사용하지 않음(JWT 토큰으로 인증)
                 .addFilterBefore(new JwtAuthenticationFilter(jwtProvider), UsernamePasswordAuthenticationFilter.class)
+                // 토큰을 읽은 직후, 인가(AuthorizationFilter) 전. 공개 경로도 막아야 해서 인가 규칙이 아니라 필터로 둔다
+                .addFilterAfter(new PasswordChangeRequiredFilter(exceptionResolver), JwtAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/error").permitAll()     // 오류 포워드가 401로 덮이지 않게
                         .requestMatchers("/actuator/health/**").permitAll()

@@ -18,6 +18,7 @@ public enum ErrorCode {
     UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다"),
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "번호 또는 비밀번호가 틀렸습니다"),   // AU-05: 가입 여부를 드러내지 않게 문구 하나
     FORBIDDEN(HttpStatus.FORBIDDEN, "접근 권한이 없습니다"),
+    PASSWORD_CHANGE_REQUIRED(HttpStatus.FORBIDDEN, "비밀번호를 변경한 뒤 이용할 수 있습니다"),   // AU-06, AU-08: 토큰의 pcr 표시
     NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 정보를 찾을 수 없습니다"),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "지원하지 않는 요청 방식입니다"),
 
