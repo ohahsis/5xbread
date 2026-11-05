@@ -36,7 +36,7 @@ public record ReservationResponse(
                 canceledAt == null ? null : toOffset(canceledAt), items, reservation.getTotalPrice());
     }
 
-    private static OffsetDateTime toOffset(LocalDateTime time) {
+    static OffsetDateTime toOffset(LocalDateTime time) {
         return time.atZone(KST).toOffsetDateTime();
     }
 }
