@@ -2,6 +2,8 @@ package com.fivexbread.reservation;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -47,6 +49,16 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             WHERE member_id = :memberId AND sale_date = :saleDate AND status <> 'CANCELED'
             """, nativeQuery = true)
     long countActive(@Param("memberId") long memberId, @Param("saleDate") LocalDate saleDate);
+
+    /** 예약들의 항목을 한 번에 읽는다 (C-05). uk_item (reservation_id, bread_id) 순서 그대로라 정렬이 따로 없다 */
+    @Query(value = """
+            SELECT i.reservation_id AS reservationId, i.bread_id AS breadId, b.name AS name,
+                   i.quantity AS quantity, i.unit_price AS unitPrice
+            FROM reservation_item i JOIN bread b ON b.id = i.bread_id
+            WHERE i.reservation_id IN (:reservationIds)
+            ORDER BY i.reservation_id, i.bread_id
+            """, nativeQuery = true)
+    List<ReservationItemRow> findItems(@Param("reservationIds") Collection<Long> reservationIds);
 
     /** 그날 마지막 예약번호. 예약번호 Redis 카운터를 다시 채울 때의 기준 (uk_reservation_no 인덱스) */
     @Query(value = "SELECT MAX(reservation_no) FROM reservation WHERE sale_date = :saleDate", nativeQuery = true)

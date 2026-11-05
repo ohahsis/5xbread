@@ -112,7 +112,7 @@ public class Reservation {
         if (status != ReservationStatus.RESERVED) {
             throw new BusinessException(ErrorCode.INVALID_STATUS_TRANSITION);
         }
-        if (!actor.admin() && now.isAfter(cancelDeadline())) {
+        if (!actor.admin() && deadlinePassed(now)) {
             throw new BusinessException(ErrorCode.CANCEL_DEADLINE_PASSED);
         }
         return new Cancellation(now, actor.memberId(), reason);
@@ -140,6 +140,15 @@ public class Reservation {
 
     public LocalDateTime cancelDeadline() {
         return pickupAt.minusMinutes(CANCEL_DEADLINE_MINUTES);
+    }
+
+    /** 손님이 지금 취소할 수 있는지 (C-05 cancelable). 화면이 버튼을 계산하지 않게 cancel 과 같은 규칙으로 내려준다 */
+    public boolean cancelable(LocalDateTime now) {
+        return status == ReservationStatus.RESERVED && !deadlinePassed(now);
+    }
+
+    private boolean deadlinePassed(LocalDateTime now) {
+        return now.isAfter(cancelDeadline());
     }
 
     /** MMDD-NNNN (부록 B: 고정) */
