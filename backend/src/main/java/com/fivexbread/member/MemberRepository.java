@@ -26,6 +26,14 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
             """)
     int changePassword(@Param("id") long id, @Param("currentHash") String currentHash, @Param("newHash") String newHash);
 
+    /** 임시 비밀번호 저장 (A-09). 읽은 뒤 탈퇴했으면 0행 */
+    @Modifying
+    @Query("""
+            UPDATE Member m SET m.passwordHash = :hash, m.mustChangePassword = true
+            WHERE m.id = :id AND m.status = com.fivexbread.member.MemberStatus.ACTIVE
+            """)
+    int setTemporaryPassword(@Param("id") long id, @Param("hash") String hash);
+
     /**
      * 번호가 이미 있으면 넣지 않는 INSERT. 넣었으면 1, 중복이면 0.
      * 중복 키 오류를 내지 않아 Hibernate 가 번호 원문을 ERROR 로그에 남기지 않는다 (AU-10).
