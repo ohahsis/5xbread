@@ -30,10 +30,10 @@
 |---|---|
 | 저장소 구조 | 모노레포. `backend/`(Spring), `frontend/`(2차), `infra/`, `load/`, `docs/` |
 | 로컬 인프라 | `compose.yaml`: MySQL·Redis만. 앱은 IDE에서 실행. Spring Docker Compose Support가 접속 정보를 자동 연결 (`spring.docker.compose.file=../compose.yaml`) |
-| 앱 3개 구성 | `compose.full.yaml`: app1~3 + Nginx. 앱 3개 작업 때 Dockerfile과 함께 추가 |
+| 앱 3개 구성 | `compose.full.yaml`: MySQL·Redis(compose.yaml과 같은 설정 + healthcheck)·app1~3(같은 이미지 `backend/Dockerfile`)·Nginx(`infra/nginx/nginx.conf`). 프로젝트 이름 `fivexbread-full`·볼륨을 개발용과 나누고 MySQL·Redis 포트는 열지 않아, 두 환경을 함께 띄워도 데이터·포트가 섞이지 않는다. 앱은 `docker` 프로필(아래 6장 "앱 3개 docker 프로필") |
 | 비밀 값 | `.env`(git 제외)에 두고 `.env.example`에 키 이름만 커밋 |
 | 사장님 초기 계정 | Flyway SQL이 아니라 `ApplicationRunner`로 생성. ADMIN이 없으면 `.env`의 `ADMIN_INITIAL_PHONE`·`ADMIN_INITIAL_PASSWORD`(BCrypt로 해시)로 만들고 `must_change_password=true`. 값이 비었거나 형식이 틀리면 앱은 띄우고 경고만 남김. 앱 여러 개가 동시에 떠도 MySQL `GET_LOCK`으로 한 명만 생성 |
-| 테스트 손님 1,000명 | `local` 프로필 전용 마이그레이션 위치에만 둠 (운영에는 들어가지 않게)                                                                                                                                                                                       |
+| 테스트 손님 1,000명 | **마이그레이션이 아니라 `load/seed.sql`**(부하 테스트 전에 `load/run.sh`가 실행). 운영 마이그레이션에는 넣지 않는다. 이유는 6장 "부하 테스트 데이터" |
 | 브랜치 | `main` 보호(PR로만 merge, squash merge). 작업 브랜치는 `feat/{기능ID}-{이름}`, `fix/`, `chore/`, `test/`, `docs/`. 서로 의존하는 기능 묶음은 대표 ID 하나로 브랜치를 만들고, 커밋은 기능 ID별로 나누며 PR 제목에 포함 ID를 모두 적는다 (예: feat/A-01-admin-stock → [A-01·A-04·A-02])        |
 
 ---
@@ -73,10 +73,10 @@ MySQL 컨테이너는 `--default-time-zone=+09:00`, 문자셋은 `utf8mb4`로 �
 
 | 기능 | 비고 |
 |---|---|
-| C-04 예약 | Redis Lua → DB 조건부 UPDATE → 보상, Idempotency-Key, 요청 제한. A-02 수량 변경의 Redis 반영 포함 |
-| C-06·A-08 취소·직권 취소 | 동시 취소는 상태 조건부 UPDATE로 1건만 성공. 취소와 수령의 동시 처리(N-07) 테스트는 A-06에서 |
-| 앱 3개 + Nginx | `Dockerfile`, `compose.full.yaml` |
-| 테스트 | 동시 예약 1,000건 초과 0건 (앱 1개, 앱 3개 환경 모두) |
+| C-04 예약 | 완료(#5). Redis Lua → DB 조건부 UPDATE → 보상, Idempotency-Key, 요청 제한. A-02 수량 변경의 Redis 반영 포함 |
+| C-06·A-08 취소·직권 취소 | 완료(#6). 동시 취소는 상태 조건부 UPDATE로 1건만 성공. 취소와 수령의 동시 처리(N-07) 테스트는 A-06에서 |
+| 앱 3개 + Nginx | 완료(chore/multi-app-nginx). `backend/Dockerfile`, `compose.full.yaml`, `infra/nginx/nginx.conf`. 앱 3개 동시 기동에서 Flyway 1회 적용·사장님 계정 1개 확인 |
+| 테스트 | 동시 예약 1,000건 초과 0건. 앱 1개는 `ReservationApiTest`(#5), 앱 3개는 `load/run.sh`(k6 컨테이너): 201 120 / 409 880 / 5xx 0, 앱별 333·334·333 |
 
 ### 2단계: 운영 기능 (~11/3 화)
 
@@ -177,6 +177,11 @@ MySQL 컨테이너는 `--default-time-zone=+09:00`, 문자셋은 `utf8mb4`로 �
 | C-06 Redis 복구와 재적재 | 13-2: 커밋 후 Redis 복구 (재적재와의 경쟁은 정의서에 없음) | 커밋과 복구 사이에 `user_qty` 해시가 사라졌다가(만료·Redis 재시작) 같은 손님의 새 예약이 DB 기준(취소가 반영된 값)으로 다시 적재하면, 복구가 한 번 더 빼서 1인 한도·하루 건수가 실제보다 느슨해진다. 이를 막으려고 적재할 때마다 `gen`(UUID) 필드를 넣고, 취소는 커밋 전에 `gen`을 읽어 두며, 복구 Lua는 해시의 `gen`이 같을 때만 수량과 `count`를 뺀다(다르거나 없으면 건너뜀). 어긋나도 항상 더 엄격한 쪽이고 추가 비용은 HGET 1회. C-04 보상도 RESERVE가 돌려준 `gen`으로 같은 규칙을 쓴다. 재고 키는 없으면 건드리지 않는다(0부터 만들지 않음). 재고 키의 같은 경쟁은 Redis 잔여가 DB보다 많아지는 쪽이라 DB 조건부 UPDATE가 초과 예약을 막고, 맞추는 것은 3단계 N-05 |
 | C-06 outbox 미사용 | 13-2·9장 `outbox_event` | 취소도 4장 "정의서와 다르게 단순화"대로 커밋 후 처리한다. 복구가 유실되면 재고는 덜 팔리는 쪽, `user_qty`는 더 엄격한 쪽으로만 어긋나 초과 예약이 생기지 않고, N-05 정합성 점검이 보정한다 |
 | A-08 직권 취소 | A-08 "취소 마감 제한 없음, 사유 필수", 9장 필드 규격: 직권 취소 사유 5~100자, 11장 `PATCH /admin/reservations/{id}` | 본문은 `status`와 `cancelReason`만 받는다. 사유는 앞뒤 공백을 뺀 글자 수(코드포인트)로 5~100자, 줄바꿈 허용, 없거나 범위 밖이면 400 `errors[{field: cancelReason}]`. 마감 검사만 빼고 손님 취소와 같은 순서·같은 조건부 UPDATE를 써서, 손님 취소와 동시에 오면 한쪽만 성공한다. `canceled_by`는 사장님 id. `status: PICKED_UP`은 A-06에서 같은 경로에 허용 상태를 하나 더해 붙인다. `admin_action_log` 기록은 1차에서 하지 않는다(이력은 `reservation_history`에 actor로 남음) |
+| 앱 3개 docker 프로필 | 8장 인프라 표 (프로필 언급 없음), `application.yml`의 기본 프로필은 `local` | 컨테이너 앱은 `SPRING_PROFILES_ACTIVE=docker`로 띄운다. 아무 프로필도 켜지 않으면 기본값 `local`이 켜져 SQL 바인딩 TRACE 로그(전화번호 원문)가 남는다. `application-docker.yml`은 readiness 프로브(`/actuator/health/readiness`, compose healthcheck가 사용)와 종료 대기 20초만 둔다. 접속 정보·비밀 값은 모두 환경 변수 |
+| 부하 테스트 데이터 | 14장 "Flyway가 ... 테스트 손님 1,000명을 넣음", 2장 "local 프로필 전용 마이그레이션 위치" | **정의서·2장 초안과 다르게** Flyway가 아니라 `load/seed.sql`로 넣는다. 부하 테스트는 실행마다 같은 시작 상태(예약 0, 지금 열려 있는 판매일)가 필요한데, 마이그레이션은 한 번만 적용되고 적용한 날짜에 고정된다. 또 프로필별 location으로 넣으면 그 DB를 location 없이 띄울 때 "적용됐지만 파일 없음"으로 Flyway 검증이 실패한다. 스크립트는 10일 뒤 판매일(V2 시드의 1~7일 뒤와 겹치지 않음)의 예약·재고를 지우고 다시 넣으며, `run.sh`가 그 날의 Redis 키도 지운다. 손님 번호는 실제로 배정되지 않는 010-0000-0001~1000, 비밀번호는 공통(BCrypt 해시만 저장) |
+| 부하 테스트 도구 | 8장 "k6 (로컬 설치 또는 컨테이너)", 14장 예시 `setup()`에서 1,000명 로그인 | `grafana/k6` 컨테이너를 compose의 `load` 프로필 서비스로 둔다(같은 네트워크에서 `http://nginx` 호출, 로컬 설치 불필요). 로그인은 실제 API로 하되 `setup()`이 아니라 각 VU가 직접 한다. `setup()`이 돌려준 토큰 배열은 VU 1,000개에 각각 복사돼 메모리를 많이 쓰고, 순차 로그인은 BCrypt 때문에 느리다. VU는 로그인 후 시작 60초 시점까지 기다렸다가 함께 예약해, 예약 요청만 한순간에 몰리게 한다. 테스트용 인증 우회는 만들지 않는다 |
+| Nginx 재시도 | 14장 예시 `proxy_next_upstream error timeout` | 그대로 두고 `non_idempotent`는 넣지 않는다. Nginx는 POST·PATCH를 앱에 보낸 뒤에는 다음 앱으로 다시 보내지 않으므로, 연결부터 실패한 요청만 다른 앱으로 가고 처리 중 끊긴 예약은 502/504로 끝난다(재시도는 손님의 Idempotency-Key가 막음). `http_503`은 넣지 않는다(Redis 장애 503은 모든 앱이 같음). `max_fails=1 fail_timeout=10s`, 연결 2초·응답 30초. `X-Forwarded-For`는 이어 붙이지 않고 `$remote_addr`로 덮어 가입 IP 제한(AU-02) 우회를 막는다. 처리한 앱을 알려 주는 `X-Upstream`(앱 내부 IP)은 손님용 80에는 붙이지 않고, 호스트에 공개하지 않는 8081 포트로 들어온 요청(compose 네트워크 안의 k6)에만 붙인다. 출발지 IP로 나누지 않는 이유는 Docker userland-proxy를 거치면 바깥 요청도 게이트웨이 IP로 보이기 때문 |
+| 기본 사용자 비활성화 | AU-10 로그 마스킹 | Spring Security의 `UserDetailsServiceAutoConfiguration`을 끈다. 켜 두면 쓰지 않는 기본 사용자를 만들면서 생성 비밀번호를 시작 로그에 원문으로 남긴다(앱 3개 컨테이너 로그에서 발견) |
 
 ---
 
@@ -206,3 +211,5 @@ MySQL 컨테이너는 `--default-time-zone=+09:00`, 문자셋은 `utf8mb4`로 �
 | 2026-10-29 | 6장: C-04 Idempotency 저장·하루 3건·DB 조건부 UPDATE 0행(정의서와 다르게 409)·업무 규칙 오류·Redis 키와 예약번호, A-02 Redis 반영 순서 추가 |
 | 2026-11-02 | 6장: C-06 취소 요청 형식·순서·Redis 복구와 재적재(`gen` 세대)·outbox 미사용, A-08 직권 취소 해석 추가 |
 | 2026-11-02 | 4장: 트랜잭셔널 아웃박스를 3단계에 추가(2차에서 당김), 미루는 순서 변경, C-06의 N-07 테스트를 A-06으로. 단순화 표의 아웃박스 행 갱신 |
+| 2026-11-06 | 6장: Nginx 재시도 행에 `X-Upstream`을 내부 포트 8081에만 붙이는 결정 추가 |
+| 2026-11-02 | 2장: 앱 3개 구성, 테스트 손님 1,000명(마이그레이션 → `load/seed.sql`)을 실제 구성에 맞춤. 4장: 1단계 완료 표시. 6장: 앱 3개 docker 프로필, 부하 테스트 데이터(정의서와 다르게)·도구, Nginx 재시도, 기본 사용자 비활성화 추가 |
