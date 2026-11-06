@@ -5,6 +5,7 @@ import com.fivexbread.common.ErrorCode;
 import com.fivexbread.saledate.BreadQuantity;
 import com.fivexbread.saledate.DailyStockRepository;
 import com.fivexbread.saledate.StockKeys;
+import com.fivexbread.saledate.StockRedisSync;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -13,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -112,6 +114,7 @@ public class ReservationStockStore {
             """, Long.class);
 
     private final StringRedisTemplate redisTemplate;
+    private final StockRedisSync stockRedisSync;
     private final DailyStockRepository dailyStockRepository;
     private final ReservationRepository reservationRepository;
     private final ReservationProperties properties;
@@ -170,16 +173,14 @@ public class ReservationStockStore {
         return generation == null ? null : generation.toString();
     }
 
-    /** DB 기준으로 빠진 키만 채운다. NX 라 앱 여러 개가 동시에 채워도 먼저 쓴 값을 덮지 않는다 */
+    /** DB 기준으로 빠진 키만 채운다 */
     private void load(ReservationPlan plan, List<String> missing) {
         LocalDate date = plan.saleDate();
         Duration ttl = StockKeys.ttl(date, LocalDateTime.now(clock));
         List<Long> breadIds = missing.stream().filter(value -> !"USER".equals(value)).map(Long::valueOf).toList();
         if (!breadIds.isEmpty()) {
-            for (BreadQuantity remaining : dailyStockRepository.findRemaining(date, breadIds)) {
-                redisTemplate.opsForValue().setIfAbsent(StockKeys.stock(date, remaining.getBreadId()),
-                        String.valueOf(remaining.getQuantity()), ttl);
-            }
+            stockRedisSync.fillMissing(date, dailyStockRepository.findRemaining(date, breadIds).stream()
+                    .collect(Collectors.toMap(BreadQuantity::getBreadId, row -> row.getQuantity().intValue())));
         }
         if (missing.contains("USER")) {
             List<String> args = new ArrayList<>();

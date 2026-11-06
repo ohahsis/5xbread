@@ -48,6 +48,9 @@ dependencies {
     implementation("net.javacrumbs.shedlock:shedlock-spring:6.10.0")
     implementation("net.javacrumbs.shedlock:shedlock-provider-redis-spring:6.10.0")
 
+    // 로컬 캐시 (버전은 Boot BOM 이 관리)
+    implementation("com.github.ben-manes.caffeine:caffeine")
+
     // 편의
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
@@ -60,8 +63,6 @@ dependencies {
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:mysql")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-
-    // 이후 추가 예정 (해당 기능 작업 때): caffeine
 }
 
 tasks.withType<Test> {

@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -40,6 +41,9 @@ class SaleDateQueryApiTest extends IntegrationTestSupport {
     JdbcTemplate jdbcTemplate;
 
     @Autowired
+    StringRedisTemplate redis;
+
+    @Autowired
     JwtProvider jwtProvider;
 
     @Autowired
@@ -57,6 +61,7 @@ class SaleDateQueryApiTest extends IntegrationTestSupport {
     void setUp() {
         data = new SaleDateTestData(jdbcTemplate, LocalDate.now(clock));
         data.clean();
+        redis.getConnectionFactory().getConnection().serverCommands().flushAll();   // 잔여는 Redis 가 먼저다. 앞 테스트의 키를 지운다
         date = data.today().plusDays(15);
         openAt = date.minusDays(3).atTime(10, 0);
         closeAt = date.minusDays(1).atTime(20, 0);

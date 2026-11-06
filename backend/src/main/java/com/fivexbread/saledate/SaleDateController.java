@@ -29,6 +29,7 @@ public class SaleDateController {
     static final int MAX_RANGE_DAYS = 31;                   // 10장: 기간 최대 31일 (from·to 포함)
 
     private final SaleDateQueryService saleDateQueryService;
+    private final SaleBreadsFacade saleBreadsFacade;
 
     @GetMapping
     public List<SaleDateStatusResponse> list(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -51,7 +52,7 @@ public class SaleDateController {
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @AuthenticationPrincipal AuthMember member) {
         Long memberId = member == null ? null : member.memberId();
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(saleDateQueryService.breads(date, memberId));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(saleBreadsFacade.breads(date, memberId));
     }
 
     @GetMapping("/{date}/pickup-slots")

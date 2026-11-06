@@ -26,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 예약 업무 규칙 (13-1 4단계, decisions.md 6장 "C-04 업무 규칙 오류"). 수량·한도·하루 건수는 Redis Lua 가 원자적으로 본다.
  * 순서: 판매일 없음 404 → 휴무일·예약 기간 밖 422 → 픽업 시간대 422 → 팔지 않는 빵 422 → 1건 20개 422 → 노쇼 제한 422.
- * 판매일 캐시(30초)는 3단계에서 붙인다. 그 전까지는 DB 를 읽는다.
+ * 판매일·빵은 로컬 캐시가 아니라 DB 를 읽는다. 예약 기간(R-11)과 금액은 캐시 30초만큼 틀리면 안 된다 (decisions.md 6장 "C-02 캐시 범위").
  */
 @Service
 @RequiredArgsConstructor

@@ -14,11 +14,13 @@ public interface DailyStockRepository extends JpaRepository<DailyStock, Long> {
 
     /**
      * 손님 빵 목록 (13-4 카탈로그 쿼리). 판매 중인 빵만, 쿼리 1번이라 N+1 없음.
-     * 1차는 잔여를 DB 에서 계산하므로(decisions.md 4장) reserved_qty 를 읽어 ix_daily_stock_catalog 커버링은 되지 않는다.
+     * 잔여는 Redis 에서 읽어 reserved_qty 를 고르지 않는다. 그래도 옵티마이저는 bread 를 먼저 읽어
+     * ix_daily_stock_catalog 커버링을 타지 않는다(decisions.md "C-02 카탈로그 쿼리 실행 계획").
+     * 목록 캐시(SaleCatalogCache)와 예약 규칙 검사가 함께 쓴다. 예약 쪽은 캐시를 거치지 않아 금액이 DB 가격이다.
      */
     @Query("""
             select new com.fivexbread.saledate.SaleBreadRow(
-                b.id, b.name, b.price, s.perUserLimit, s.reservableQty, s.reservedQty, b.displayOrder)
+                b.id, b.name, b.price, s.perUserLimit, b.displayOrder)
             from DailyStock s join Bread b on b.id = s.breadId
             where s.saleDate = :saleDate and b.active = true
             order by b.displayOrder, b.id
