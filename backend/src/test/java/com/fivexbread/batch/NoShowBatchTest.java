@@ -134,7 +134,8 @@ class NoShowBatchTest extends IntegrationTestSupport {
     @Test
     void 묶음_크기를_넘는_2500건과_회원_1250명을_전부_처리한다() {
         List<Long> members = data.members(1_250);
-        bulkReservations(members, 2);
+        bulkReservations(members, today.minusDays(7), "NO_SHOW", 1);       // 2회째가 되도록 이전 노쇼 1일
+        bulkReservations(members, today, "RESERVED", 2);
 
         noShowBatch.run();
 
@@ -285,8 +286,20 @@ class NoShowBatchTest extends IntegrationTestSupport {
     }
 
     @Test
-    void R17_같은_날_예약_2건이_모두_노쇼면_2회로_센다() {
+    void R17_같은_날_예약_여러_건이_모두_노쇼여도_1회로_센다() {
         reservation(member, today, "RESERVED");
+        reservation(member, today, "RESERVED");
+        reservation(member, today, "RESERVED");
+
+        noShowBatch.run();
+
+        assertThat(blockedUntil(member)).isNull();
+    }
+
+    @Test
+    void R17_다른_날_노쇼가_있으면_같은_날_여러_건은_합쳐서_2회다() {
+        reservation(member, today.minusDays(7), "NO_SHOW");
+        reservation(member, today.minusDays(7), "NO_SHOW");
         reservation(member, today, "RESERVED");
 
         noShowBatch.run();
@@ -360,20 +373,20 @@ class NoShowBatchTest extends IntegrationTestSupport {
         return jdbcTemplate.queryForObject("SELECT id FROM reservation WHERE idempotency_key = ?", Long.class, key);
     }
 
-    private void bulkReservations(List<Long> members, int perMember) {
-        long slot = slotOf(today);
+    private void bulkReservations(List<Long> members, LocalDate date, String status, int perMember) {
+        long slot = slotOf(date);
         List<Object[]> rows = new ArrayList<>();
         int seq = 0;
         for (long memberId : members) {
             for (int i = 0; i < perMember; i++) {
-                rows.add(new Object[]{"%02d%02d-%04d".formatted(today.getMonthValue(), today.getDayOfMonth(), ++seq), memberId,
-                        today, slot, today.atTime(11, 0), UUID.randomUUID().toString()});
+                rows.add(new Object[]{"%02d%02d-%04d".formatted(date.getMonthValue(), date.getDayOfMonth(), ++seq), memberId,
+                        date, slot, date.atTime(11, 0), status, UUID.randomUUID().toString()});
             }
         }
         jdbcTemplate.batchUpdate("""
                 INSERT INTO reservation (reservation_no, member_id, phone_last4, sale_date, pickup_slot_id, pickup_at,
                                          status, total_price, idempotency_key)
-                VALUES (?, ?, '0000', ?, ?, ?, 'RESERVED', 3500, ?)""", rows);
+                VALUES (?, ?, '0000', ?, ?, ?, ?, 3500, ?)""", rows);
     }
 
     private void block(long memberId, LocalDate until) {

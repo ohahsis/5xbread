@@ -74,11 +74,14 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             """, nativeQuery = true)
     List<Long> findNoShowMemberIds(@Param("saleDate") LocalDate saleDate);
 
-    /** 기간 안 노쇼가 threshold 건 이상인 회원 (R-17). ix_resv_member_status (member_id, status, sale_date) 커버링 */
+    /**
+     * 기간 안에 노쇼한 판매일이 threshold 일 이상인 회원 (R-17). 같은 날 여러 건은 1회로 센다.
+     * ix_resv_member_status (member_id, status, sale_date) 커버링
+     */
     @Query(value = """
             SELECT member_id FROM reservation
             WHERE member_id IN (:memberIds) AND status = 'NO_SHOW' AND sale_date BETWEEN :from AND :to
-            GROUP BY member_id HAVING COUNT(*) >= :threshold
+            GROUP BY member_id HAVING COUNT(DISTINCT sale_date) >= :threshold
             """, nativeQuery = true)
     List<Long> findRepeatNoShowMemberIds(@Param("memberIds") Collection<Long> memberIds, @Param("from") LocalDate from,
                                          @Param("to") LocalDate to, @Param("threshold") int threshold);
