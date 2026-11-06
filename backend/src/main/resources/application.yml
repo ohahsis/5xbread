@@ -47,6 +47,10 @@ fivexbread:
     max-total-quantity: 20        # Q-07: 예약 1건 최대 총수량
     rate-limit-per-second: 5      # N-23: 회원당 초당 예약 요청
     idempotency-ttl: 24h          # N-06: Idempotency 결과 보관
+  no-show:
+    # 부록 B: 매일 21:00 (zone 은 NoShowJob 의 Asia/Seoul). store.close-time 을 늦추면 이 시각도 함께 늦춰야 한다.
+    # 앞서면 아직 픽업할 수 있는 예약이 노쇼가 된다. "-" 면 스케줄을 끈다
+    cron: ${NO_SHOW_CRON:0 0 21 * * *}
   signup:
     daily-limit-per-ip: 10        # AU-02, 부록 B
     terms-version: "v1"           # 서비스 이용약관

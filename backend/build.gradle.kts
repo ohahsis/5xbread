@@ -44,6 +44,10 @@ dependencies {
     implementation("org.flywaydb:flyway-mysql")
     runtimeOnly("com.mysql:mysql-connector-j")
 
+    // 스케줄러 단일 실행 (decisions.md 6장 "ShedLock 공통 설정"). 7.x 는 Spring 7(Boot 4)용이라 6.x 마지막 버전으로 고정
+    implementation("net.javacrumbs.shedlock:shedlock-spring:6.10.0")
+    implementation("net.javacrumbs.shedlock:shedlock-provider-redis-spring:6.10.0")
+
     // 편의
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
@@ -57,7 +61,7 @@ dependencies {
     testImplementation("org.testcontainers:mysql")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
-    // 이후 추가 예정 (해당 기능 작업 때): caffeine, shedlock
+    // 이후 추가 예정 (해당 기능 작업 때): caffeine
 }
 
 tasks.withType<Test> {
