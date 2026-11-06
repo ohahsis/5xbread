@@ -44,6 +44,14 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
             """)
     int extendReservationBlock(@Param("ids") Collection<Long> ids, @Param("until") LocalDate until);
 
+    /** 노쇼 제한 해제 (A-10). 제한이 없으면 0행이라 호출한 쪽이 이력을 남기지 않는다 */
+    @Modifying
+    @Query("""
+            UPDATE Member m SET m.reservationBlockedUntil = NULL
+            WHERE m.id = :id AND m.reservationBlockedUntil IS NOT NULL
+            """)
+    int clearReservationBlock(@Param("id") long id);
+
     /**
      * 번호가 이미 있으면 넣지 않는 INSERT. 넣었으면 1, 중복이면 0.
      * 중복 키 오류를 내지 않아 Hibernate 가 번호 원문을 ERROR 로그에 남기지 않는다 (AU-10).
