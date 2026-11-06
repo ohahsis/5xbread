@@ -1,6 +1,8 @@
 package com.fivexbread.member;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -33,6 +35,22 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
             WHERE m.id = :id AND m.status = com.fivexbread.member.MemberStatus.ACTIVE
             """)
     int setTemporaryPassword(@Param("id") long id, @Param("hash") String hash);
+
+    /** 노쇼 제한 적용 (R-17). 이미 until 이후까지 제한된 회원은 조건에서 빠져 기간이 줄지 않는다 */
+    @Modifying
+    @Query("""
+            UPDATE Member m SET m.reservationBlockedUntil = :until
+            WHERE m.id IN :ids AND (m.reservationBlockedUntil IS NULL OR m.reservationBlockedUntil < :until)
+            """)
+    int extendReservationBlock(@Param("ids") Collection<Long> ids, @Param("until") LocalDate until);
+
+    /** 노쇼 제한 해제 (A-10). 제한이 없으면 0행이라 호출한 쪽이 이력을 남기지 않는다 */
+    @Modifying
+    @Query("""
+            UPDATE Member m SET m.reservationBlockedUntil = NULL
+            WHERE m.id = :id AND m.reservationBlockedUntil IS NOT NULL
+            """)
+    int clearReservationBlock(@Param("id") long id);
 
     /**
      * 번호가 이미 있으면 넣지 않는 INSERT. 넣었으면 1, 중복이면 0.

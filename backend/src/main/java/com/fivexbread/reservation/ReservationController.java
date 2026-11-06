@@ -30,7 +30,7 @@ public class ReservationController {
     private static final Pattern UUID_FORMAT =
             Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
-    static final String MERGE_PATCH_JSON = "application/merge-patch+json";   // RFC 7396
+    public static final String MERGE_PATCH_JSON = "application/merge-patch+json";   // RFC 7396
 
     private final ReservationFacade reservationFacade;
     private final ReservationCancelFacade reservationCancelFacade;

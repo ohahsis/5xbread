@@ -90,6 +90,10 @@ public class Member {
 
     /** 사장님이 임시 비밀번호를 발급할 수 있는 회원. 사장님 계정은 현재 비밀번호 확인을 건너뛰지 못하게 뺀다 (decisions.md 6장) */
     public boolean canReceiveTemporaryPassword() {
+        return isActiveCustomer();
+    }
+
+    public boolean isActiveCustomer() {
         return role == Role.CUSTOMER && status == MemberStatus.ACTIVE;
     }
 
