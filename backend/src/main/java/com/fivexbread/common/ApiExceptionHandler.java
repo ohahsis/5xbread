@@ -5,6 +5,8 @@ import java.util.UUID;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
@@ -51,9 +53,10 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     // Redis 장애: 예약을 503으로 중단한다 (Q-05). 복구되면 재고 키를 DB 기준으로 다시 채운다
-    @ExceptionHandler(RedisConnectionFailureException.class)
-    public ResponseEntity<Object> handleRedisDown(RedisConnectionFailureException ex, WebRequest request) {
-        log.error("Redis 연결 실패", ex);
+    // 끊긴 연결로 보낸 명령은 재연결을 기다리다 시간 초과로 끝나므로 QueryTimeoutException 도 같은 장애다
+    @ExceptionHandler({RedisConnectionFailureException.class, QueryTimeoutException.class})
+    public ResponseEntity<Object> handleRedisDown(DataAccessException ex, WebRequest request) {
+        log.error("저장소 연결 실패 또는 시간 초과", ex);
         return respond(ErrorCode.SERVICE_UNAVAILABLE, request);
     }
 
