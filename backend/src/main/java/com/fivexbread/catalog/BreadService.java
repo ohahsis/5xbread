@@ -4,6 +4,7 @@ import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class BreadService {
 
     private final BreadRepository breadRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public List<Bread> list(Boolean active) {
@@ -86,7 +88,9 @@ public class BreadService {
     // 조회와 저장 사이에 같은 이름이 들어온 경우. 예외를 삼키지 않고 업무 예외로 바꿔 던져 트랜잭션은 롤백된다
     private Bread saveAndFlush(Bread bread) {
         try {
-            return breadRepository.saveAndFlush(bread);
+            Bread saved = breadRepository.saveAndFlush(bread);
+            eventPublisher.publishEvent(CatalogChanged.allDates());      // 빵은 모든 판매일의 목록에 나온다
+            return saved;
         } catch (DataIntegrityViolationException e) {
             throw new BusinessException(ErrorCode.DUPLICATE_BREAD_NAME);
         }

@@ -4,6 +4,7 @@ import static com.fivexbread.saledate.StockRowError.Reason.*;
 
 import com.fivexbread.catalog.Bread;
 import com.fivexbread.catalog.BreadRepository;
+import com.fivexbread.catalog.CatalogChanged;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
 import java.time.LocalDate;
@@ -16,6 +17,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +42,7 @@ public class StockService {
     private final SaleDateRepository saleDateRepository;
     private final DailyStockRepository dailyStockRepository;
     private final BreadRepository breadRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public record Result(StocksResponse stocks, String eTag) {
     }
@@ -100,6 +103,7 @@ public class StockService {
                             ((Number) r[1]).intValue()))
                     .toList());
         }
+        eventPublisher.publishEvent(CatalogChanged.of(date));
         return new Result(view(date), SaleDate.eTagOf(expectedVersion + 1));
     }
 

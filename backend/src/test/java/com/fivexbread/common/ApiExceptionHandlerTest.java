@@ -102,6 +102,13 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
+    void Redis_명령_시간_초과는_연결_실패처럼_503() throws Exception {
+        mockMvc.perform(get("/test/redis-timeout"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
+    }
+
+    @Test
     void 깨진_JSON_본문은_400이고_Spring_기본_detail을_노출하지_않는다() throws Exception {
         mockMvc.perform(post("/test/validate")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -130,6 +137,11 @@ class ApiExceptionHandlerTest {
 
         @PostMapping("/test/validate")
         void validate(@Valid @RequestBody Request request) {
+        }
+
+        @GetMapping("/test/redis-timeout")
+        void redisTimeout() {
+            throw new org.springframework.dao.QueryTimeoutException("Redis command timed out");
         }
 
         @GetMapping("/test/boom")

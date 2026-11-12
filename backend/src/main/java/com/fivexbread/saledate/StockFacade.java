@@ -58,7 +58,7 @@ public class StockFacade {
     }
 
     /**
-     * 커밋 후 처리를 모으는 곳. 3단계에서 판매일 캐시 무효화·잔여 변경 발행(C-03)을 여기에 붙인다.
+     * 커밋 후 처리를 모으는 곳. 3단계에서 잔여 변경 발행(C-03)을 여기에 붙인다. 캐시 무효화는 CatalogCacheEvictor 가 한다.
      * 늘리기는 실패해도 저장은 이미 끝났다. Redis 잔여가 DB 보다 적은 "덜 팔리는" 방향이라 ERROR 로그만 남긴다 (N-05 가 보정).
      */
     private void afterCommit(LocalDate date, Map<Long, Integer> increases) {

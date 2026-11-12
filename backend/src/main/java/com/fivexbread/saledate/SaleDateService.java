@@ -2,6 +2,7 @@ package com.fivexbread.saledate;
 
 import static com.fivexbread.common.ClockConfig.KST;
 
+import com.fivexbread.catalog.CatalogChanged;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
 import com.fivexbread.saledate.SaleDateViolation.Reason;
@@ -16,6 +17,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +33,7 @@ public class SaleDateService {
     private final PickupSlotRepository pickupSlotRepository;
     private final DailyStockRepository dailyStockRepository;
     private final StoreProperties storeProperties;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public record Result(SaleDateResponse saleDate, boolean created) {
@@ -79,8 +82,13 @@ public class SaleDateService {
         pickupSlotRepository.saveAll(wanted.stream().filter(time -> !kept.contains(time))
                 .map(time -> new PickupSlot(date, time)).toList());
         if (holiday) {
+            List<Long> breadIds = dailyStockRepository.findBySaleDate(date).stream().map(DailyStock::getBreadId).toList();
             dailyStockRepository.deleteBySaleDate(date);    // 휴무일에는 수량을 두지 않는다. 예약이 없음을 위에서 확인했다
+            if (!breadIds.isEmpty()) {
+                eventPublisher.publishEvent(new StockRowsRemoved(date, breadIds));
+            }
         }
+        eventPublisher.publishEvent(CatalogChanged.of(date));
         return new Result(SaleDateResponse.of(saleDate, pickupSlotRepository.findBySaleDateOrderByPickupAt(date)),
                 existing.isEmpty());
     }
