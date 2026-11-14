@@ -82,7 +82,7 @@ public class ReservationStockStore {
             """, List.class);
 
     /*
-     * 차감을 되돌린다 (C-04 보상, C-06·A-08 취소). 재고 키가 없으면 건드리지 않는다.
+     * 차감을 되돌린다 (C-04 보상). 취소는 RELEASE_ONCE. 재고 키가 없으면 건드리지 않는다.
      * 없는 키에 INCRBY 하면 0에서 시작하는 틀린 키가 생기기 때문. 그 키는 다음 예약 때 DB 기준으로 다시 채워진다.
      * user_qty 는 세대가 ARGV[1]과 같을 때만 뺀다(빈 값이면 빼지 않음).
      * KEYS: 재고 키 n개 + user_qty 키 / ARGV[1]: 세대, 이어서 [breadId, 수량] 반복
@@ -95,6 +95,26 @@ public class ReservationStockStore {
             end
             if ARGV[1] ~= '' and redis.call('HGET', userKey, 'gen') == ARGV[1] then
               for i = 1, n do redis.call('HINCRBY', userKey, ARGV[i*2], -tonumber(ARGV[i*2+1])) end
+              redis.call('HINCRBY', userKey, 'count', -1)
+            end
+            return 1
+            """, Long.class);
+
+    /*
+     * 취소 복구 (아웃박스 소비, C-06·A-08). applied 키를 SET NX 로 잡은 경우에만 적용해 같은 이벤트가 다시 와도 한 번만 바뀐다.
+     * 재고는 키가 있고 그 키의 적재 시각이 이벤트 생성 시각보다 늦지 않을 때만 INCRBY (StockRedisSync.LUA_RESTORE_IF_LOADED_BEFORE).
+     * user_qty 는 RELEASE 와 같이 세대가 ARGV[1]과 같을 때만 뺀다.
+     * KEYS: 재고 키 n개 + 적재 시각 키 n개 + user_qty 키 + applied 키
+     * ARGV: 세대, 이벤트 생성 시각(epoch 밀리초), applied TTL(초), 이어서 [breadId, 수량] 반복
+     * 반환: 1 적용, 0 이미 적용한 이벤트
+     */
+    private static final RedisScript<Long> RELEASE_ONCE = RedisScript.of(StockRedisSync.LUA_RESTORE_IF_LOADED_BEFORE + """
+            local n = (#KEYS - 2) / 2
+            local userKey = KEYS[2*n+1]
+            if not redis.call('SET', KEYS[2*n+2], '1', 'NX', 'EX', ARGV[3]) then return 0 end
+            for i = 1, n do restoreIfLoadedBefore(KEYS[i], KEYS[n+i], ARGV[i*2+3], ARGV[2]) end
+            if ARGV[1] ~= '' and redis.call('HGET', userKey, 'gen') == ARGV[1] then
+              for i = 1, n do redis.call('HINCRBY', userKey, ARGV[i*2+2], -tonumber(ARGV[i*2+3])) end
               redis.call('HINCRBY', userKey, 'count', -1)
             end
             return 1
@@ -149,7 +169,35 @@ public class ReservationStockStore {
     }
 
     /**
-     * 차감을 되돌린다. 재고 키가 없으면 건너뛰고, user_qty 는 세대가 같을 때만 뺀다.
+     * 취소의 Redis 복구 (아웃박스 소비, ReservationReleaseHandler). 같은 이벤트는 한 번만 적용한다.
+     *
+     * @param createdAt  이벤트 생성 시각. 이보다 늦게 다시 적재된 재고 키는 건너뛴다
+     * @param generation 취소 커밋 전에 읽어 둔 user_qty 세대. null 이면 user_qty 는 건드리지 않는다
+     * @return 적용했으면 true, 이미 적용한 이벤트면 false
+     */
+    public boolean releaseOnce(long eventId, LocalDateTime createdAt, LocalDate saleDate, long memberId,
+                               Map<Long, Integer> quantities, String generation) {
+        List<String> keys = new ArrayList<>();
+        List<String> loadedKeys = new ArrayList<>();
+        List<String> args = new ArrayList<>();
+        args.add(generation == null ? "" : generation);
+        args.add(String.valueOf(StockKeys.epochMillis(createdAt)));
+        args.add(String.valueOf(StockKeys.ttl(saleDate, LocalDateTime.now(clock)).toSeconds()));
+        quantities.forEach((breadId, quantity) -> {
+            keys.add(StockKeys.stock(saleDate, breadId));
+            loadedKeys.add(StockKeys.loadedAt(saleDate, breadId));
+            args.add(String.valueOf(breadId));
+            args.add(String.valueOf(quantity));
+        });
+        keys.addAll(loadedKeys);
+        keys.add(StockKeys.userQty(saleDate, memberId));
+        keys.add(StockKeys.applied(saleDate, eventId));
+        return Long.valueOf(1).equals(redisTemplate.execute(RELEASE_ONCE, keys, args.toArray()));
+    }
+
+    /**
+     * 예약 보상(C-04, DB 실패 시). 재고 키가 없으면 건너뛰고, user_qty 는 세대가 같을 때만 뺀다.
+     * 아웃박스를 거치지 않는다: DB 가 롤백돼 기록할 사실이 없고, 같은 요청 안에서 바로 되돌린다.
      *
      * @param quantities breadId → 수량
      * @param generation 차감했던 user_qty 의 세대. null 이면 user_qty 는 건드리지 않는다

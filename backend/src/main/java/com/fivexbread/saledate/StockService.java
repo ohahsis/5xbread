@@ -7,10 +7,12 @@ import com.fivexbread.catalog.BreadRepository;
 import com.fivexbread.catalog.CatalogChanged;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
+import com.fivexbread.common.outbox.Outbox;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 2. 모든 행 검사 → 틀린 행이 하나라도 있으면 전부 모아 422, 아무것도 바꾸지 않음
  * 3. sale_date 버전 조건부 +1 → 0행이면 다른 저장이 먼저 커밋한 것 → 412. 이 UPDATE 가 행을 잠가 동시 저장이 한 줄로 선다
  * 4. 행별 UPDATE(총량은 예약 수량 이상일 때만) → 0행이 하나라도 있으면 전체 롤백 후 422 STOCK_BELOW_RESERVED
+ * 5. 기존 행의 총량을 늘렸으면 outbox_event(STOCK_INCREASE). 커밋 후 StockFacade 가 바로 처리하고, 못 하면 폴러가 처리한다
  * 요청에 없는 빵의 행은 그대로 둔다.
  */
 @Service
@@ -43,14 +46,16 @@ public class StockService {
     private final DailyStockRepository dailyStockRepository;
     private final BreadRepository breadRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final Outbox outbox;
 
-    public record Result(StocksResponse stocks, String eTag) {
+    /** @param outboxEventId 늘린 빵이 있으면 STOCK_INCREASE 이벤트 id, 없으면 null */
+    public record Result(StocksResponse stocks, String eTag, Long outboxEventId) {
     }
 
     @Transactional(readOnly = true)
     public Result get(LocalDate date) {
         SaleDate saleDate = findSaleDate(date);
-        return new Result(view(date), saleDate.eTag());
+        return new Result(view(date), saleDate.eTag(), null);
     }
 
     /**
@@ -86,8 +91,12 @@ public class StockService {
             throw new BusinessException(ErrorCode.PRECONDITION_FAILED);
         }
         List<Long> belowReserved = new ArrayList<>();
+        Map<Long, Integer> increases = new LinkedHashMap<>();
         for (StockRowRequest row : rows) {
             DailyStock stock = stocks.get(row.breadId());
+            if (stock != null && row.reservableQty() > stock.getReservableQty()) {
+                increases.put(row.breadId(), row.reservableQty() - stock.getReservableQty());
+            }
             if (stock == null) {
                 dailyStockRepository.save(DailyStock.create(date, row.breadId(), row.producedQty(),
                         row.reservableQty(), row.perUserLimit()));
@@ -103,8 +112,10 @@ public class StockService {
                             ((Number) r[1]).intValue()))
                     .toList());
         }
+        Long eventId = increases.isEmpty() ? null
+                : outbox.append(StockIncreaseEvent.TYPE, new StockIncreaseEvent(date, increases));
         eventPublisher.publishEvent(CatalogChanged.of(date));
-        return new Result(view(date), SaleDate.eTagOf(expectedVersion + 1));
+        return new Result(view(date), SaleDate.eTagOf(expectedVersion + 1), eventId);
     }
 
     /** 404 → 휴무일 422 → 버전 412 → 행 검사 422. 통과하면 이 날의 현재 수량 행(breadId → 행) */

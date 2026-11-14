@@ -24,6 +24,7 @@ public record SaleDateTestData(JdbcTemplate jdbc, LocalDate today) {
         jdbc.update("DELETE FROM reservation_history WHERE reservation_id IN (SELECT id FROM reservation WHERE sale_date >= ?)",
                 from);
         jdbc.update("DELETE FROM reservation WHERE sale_date >= ?", from);
+        jdbc.update("DELETE FROM outbox_event");                       // payload 의 판매일로 고르지 않고 전부. 테스트 DB 전용
         jdbc.update("DELETE FROM daily_stock WHERE sale_date >= ?", from);
         jdbc.update("DELETE FROM pickup_slot WHERE sale_date >= ?", from);
         jdbc.update("DELETE FROM sale_date WHERE sale_date >= ?", from);
