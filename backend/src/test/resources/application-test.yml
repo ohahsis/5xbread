@@ -11,3 +11,6 @@ fivexbread:
   outbox:
     relay-cron: "-"               # 테스트는 폴러를 직접 호출한다. 주기 실행이 테스트 중간에 끼어들지 않게 끈다
     cleanup-cron: "-"
+  reconcile:
+    cron: "-"                     # 테스트는 StockReconciler 를 직접 호출한다
+    manual-confirm-delay: 0s      # A-12 의 두 관측 사이 변화는 테스트가 스파이로 만든다

@@ -43,6 +43,14 @@ public final class StockKeys {
         return "applied:{" + saleDate + "}:" + eventId;
     }
 
+    /**
+     * 정합성 점검(N-05)이 처음 관측한 차이. 값은 "차이:관측 시각(epoch 밀리초)". 같은 차이가 다음 회차에도 보이면 보정한다.
+     * 앱 3개 중 락을 잡은 앱이 매번 달라질 수 있어 메모리가 아니라 Redis 에 둔다 (decisions.md 6장 "N-05 연속 2회 관측").
+     */
+    public static String reconcileSeen(LocalDate saleDate, long breadId) {
+        return "reconcile_seen:{" + saleDate + "}:" + breadId;
+    }
+
     /** Lua 에서 비교할 epoch 밀리초 (KST LocalDateTime → 시각) */
     public static long epochMillis(LocalDateTime time) {
         return time.atZone(KST).toInstant().toEpochMilli();

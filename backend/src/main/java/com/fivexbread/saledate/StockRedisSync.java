@@ -109,6 +109,25 @@ public class StockRedisSync {
             return 1
             """, Long.class);
 
+    /*
+     * 정합성 보정 (N-05, A-12). 키가 있을 때만 차이를 INCRBY 하고, 적재 시각을 지금으로 바꾼다.
+     * SET 으로 덮지 않으므로 계산과 보정 사이에 들어온 예약의 차감이 그대로 남는다 (13-1 Q3 꼬리 2).
+     * 적재 시각을 바꾸는 이유: 보정값에는 이미 커밋된 변경이 모두 들어 있으므로, 아직 처리되지 않은 아웃박스 이벤트가
+     * 나중에 같은 변경을 또 더하지 않게 한다("아웃박스 지연 처리와 재적재"와 같은 규칙). 적재 시각 키의 만료는 재고 키와 같게.
+     * KEYS: 재고 키, 적재 시각 키 / ARGV: 차이, 지금(epoch 밀리초) / 반환: 보정 뒤 잔여, 키가 없으면 nil
+     */
+    private static final RedisScript<Long> ADJUST = RedisScript.of("""
+            if redis.call('EXISTS', KEYS[1]) == 0 then return false end
+            local after = redis.call('INCRBY', KEYS[1], ARGV[1])
+            local ttl = redis.call('PTTL', KEYS[1])
+            if ttl > 0 then
+              redis.call('SET', KEYS[2], ARGV[2], 'PX', ttl)
+            else
+              redis.call('SET', KEYS[2], ARGV[2])
+            end
+            return after
+            """, Long.class);
+
     private final StringRedisTemplate redisTemplate;
     private final Clock clock;
 
@@ -207,6 +226,18 @@ public class StockRedisSync {
         keys.addAll(loadedKeys);
         keys.add(StockKeys.applied(saleDate, eventId));
         return Long.valueOf(1).equals(redisTemplate.execute(INCREASE_ONCE, keys, args.toArray()));
+    }
+
+    /**
+     * 정합성 보정 (N-05, A-12). 키가 없으면 아무것도 하지 않는다(다음 예약·조회 때 DB 기준으로 적재된다).
+     *
+     * @param delta DB 기준 잔여 − 관측한 Redis 잔여
+     * @return 보정 뒤 Redis 잔여, 키가 없었으면 null
+     */
+    public Long adjust(LocalDate saleDate, long breadId, int delta) {
+        return redisTemplate.execute(ADJUST,
+                List.of(StockKeys.stock(saleDate, breadId), StockKeys.loadedAt(saleDate, breadId)),
+                String.valueOf(delta), String.valueOf(StockKeys.epochMillis(LocalDateTime.now(clock))));
     }
 
     /** 줄이기 보상(DB 실패 시). 키가 없는 빵은 건너뛴다. @param amounts breadId → 늘릴 양(양수) */
