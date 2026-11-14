@@ -86,12 +86,13 @@ class NoShowBatchTest extends IntegrationTestSupport {
     }
 
     @Test
-    void 오늘_RESERVED_만_NO_SHOW_가_되고_시스템_이력이_남는다() {
+    void 오늘과_7일_안_지난_판매일의_RESERVED_만_NO_SHOW_가_되고_시스템_이력이_남는다() {
         long reserved = reservation(member, today, "RESERVED");
         long pickedUp = reservation(member, today, "PICKED_UP");
         long canceled = reservation(member, today, "CANCELED");
         long tomorrow = reservation(member, today.plusDays(1), "RESERVED");
-        long yesterday = reservation(member, today.minusDays(1), "RESERVED");
+        long weekAgo = reservation(member, today.minusDays(7), "RESERVED");         // 처리를 못 한 날: 이어받는다
+        long eightDaysAgo = reservation(member, today.minusDays(8), "RESERVED");    // 이어받는 기간 밖
 
         noShowBatch.run();
 
@@ -99,7 +100,8 @@ class NoShowBatchTest extends IntegrationTestSupport {
         assertThat(status(pickedUp)).isEqualTo("PICKED_UP");
         assertThat(status(canceled)).isEqualTo("CANCELED");
         assertThat(status(tomorrow)).isEqualTo("RESERVED");
-        assertThat(status(yesterday)).isEqualTo("RESERVED");
+        assertThat(status(weekAgo)).isEqualTo("NO_SHOW");
+        assertThat(status(eightDaysAgo)).isEqualTo("RESERVED");
 
         Map<String, Object> history = jdbcTemplate.queryForMap(
                 "SELECT from_status, to_status, actor_id, changed_at FROM reservation_history WHERE reservation_id = ?",
@@ -109,7 +111,43 @@ class NoShowBatchTest extends IntegrationTestSupport {
         assertThat(history.get("actor_id")).isNull();
         assertThat(((LocalDateTime) history.get("changed_at"))).isEqualTo(today.atTime(21, 0));
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM reservation_history WHERE reservation_id IN (?, ?, ?, ?)",
-                Integer.class, pickedUp, canceled, tomorrow, yesterday)).isZero();
+                Integer.class, pickedUp, canceled, tomorrow, eightDaysAgo)).isZero();
+    }
+
+    @Test
+    void 지난_판매일을_이어받으면_R17은_그_판매일_기준으로_센다() {
+        // 3일 전 21:00 에 배치가 돌지 못했다. 그 판매일 기준 30일 안 2회 → 제한 끝은 그 판매일 + 14일
+        LocalDate missed = today.minusDays(3);
+        reservation(member, missed.minusDays(20), "NO_SHOW");
+        reservation(member, missed, "RESERVED");
+
+        noShowBatch.run();
+
+        assertThat(blockedUntil(member)).isEqualTo(missed.plusDays(14));
+    }
+
+    @Test
+    void 이어받은_판매일의_R17은_오늘_노쇼와_합쳐_센다() {
+        long other = data.members(1).get(0);
+        reservation(other, today.minusDays(2), "RESERVED");                         // 못 한 날
+        reservation(other, today, "RESERVED");
+
+        noShowBatch.run();
+
+        // 2일 전 기준으로는 1회라 제한 없음, 오늘 기준으로 2회 → 오늘 + 14일
+        assertThat(blockedUntil(other)).isEqualTo(today.plusDays(14));
+    }
+
+    @Test
+    void 이어받은_지난_판매일만_있어도_처리하고_그날_RESERVED가_없는_지난_날은_다시_보지_않는다(CapturedOutput output) {
+        long missed = reservation(member, today.minusDays(1), "RESERVED");
+        reservation(member, today.minusDays(4), "NO_SHOW");                         // 이미 처리된 날
+
+        noShowBatch.run();
+
+        assertThat(status(missed)).isEqualTo("NO_SHOW");
+        assertThat(output).contains("노쇼 처리를 못 한 지난 판매일을 이어서 처리 saleDates=[" + today.minusDays(1) + "]");
+        assertThat(output).doesNotContain("노쇼 처리 시작 saleDate=" + today.minusDays(4));
     }
 
     @Test

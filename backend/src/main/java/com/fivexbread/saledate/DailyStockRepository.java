@@ -54,6 +54,13 @@ public interface DailyStockRepository extends JpaRepository<DailyStock, Long> {
     List<BreadQuantity> findRemaining(@Param("saleDate") LocalDate saleDate,
                                       @Param("breadIds") Collection<Long> breadIds);
 
+    /** 정합성 점검·수량 재계산(N-05, A-12)의 DB 기준 잔여. 그날 수량 행 전부, uk_daily_stock(sale_date, bread_id) 범위 */
+    @Query(value = """
+            SELECT bread_id AS breadId, reservable_qty - reserved_qty AS quantity
+            FROM daily_stock WHERE sale_date = :saleDate ORDER BY bread_id
+            """, nativeQuery = true)
+    List<BreadQuantity> findAllRemaining(@Param("saleDate") LocalDate saleDate);
+
     /** 이 날 한 손님이 빵별로 예약한 수량(취소 제외, R-03 합산 기준) */
     @Query(value = """
             SELECT i.bread_id AS breadId, SUM(i.quantity) AS quantity

@@ -28,6 +28,7 @@ public enum ErrorCode {
     IDEMPOTENCY_IN_PROGRESS(HttpStatus.CONFLICT, "같은 요청을 처리하고 있습니다"),
     DUPLICATE_PHONE(HttpStatus.CONFLICT, "이미 가입한 휴대폰 번호입니다"),
     DUPLICATE_BREAD_NAME(HttpStatus.CONFLICT, "이미 같은 이름의 빵이 있습니다"),          // 판매 중인 빵끼리 (A-01)
+    RECONCILIATION_IN_PROGRESS(HttpStatus.CONFLICT, "같은 판매일의 수량 재계산이 진행 중입니다. 잠시 후 다시 시도해 주세요"),  // A-12·N-05
 
     PRECONDITION_FAILED(HttpStatus.PRECONDITION_FAILED, "다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도해 주세요"),
     PAYLOAD_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "파일 크기가 허용 범위를 넘었습니다"),

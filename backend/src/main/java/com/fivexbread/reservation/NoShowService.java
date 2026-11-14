@@ -52,16 +52,25 @@ public class NoShowService {
     }
 
     @Transactional(readOnly = true)
+    public List<LocalDate> saleDatesWithReserved(LocalDate from, LocalDate to) {
+        return reservationRepository.findSaleDatesWithReserved(from, to);
+    }
+
+    @Transactional(readOnly = true)
     public List<Long> noShowMemberIds(LocalDate saleDate) {
         return reservationRepository.findNoShowMemberIds(saleDate);
     }
 
-    /** @return 제한이 새로 걸리거나 늘어난 회원 수 */
+    /**
+     * R-17 을 노쇼가 난 판매일 기준으로 적용한다(세는 기간·제한 끝 모두 그 판매일부터). 늦게 이어받은 지난 판매일도 같다.
+     *
+     * @return 제한이 새로 걸리거나 늘어난 회원 수
+     */
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public int applyBlocks(List<Long> memberIds, LocalDate today) {
-        List<Long> repeated = reservationRepository.findRepeatNoShowMemberIds(memberIds, NoShowRule.windowStart(today),
-                today, NoShowRule.BLOCK_THRESHOLD);
+    public int applyBlocks(List<Long> memberIds, LocalDate saleDate) {
+        List<Long> repeated = reservationRepository.findRepeatNoShowMemberIds(memberIds,
+                NoShowRule.windowStart(saleDate), saleDate, NoShowRule.BLOCK_THRESHOLD);
         return repeated.isEmpty() ? 0
-                : memberRepository.extendReservationBlock(repeated, NoShowRule.blockedUntil(today));
+                : memberRepository.extendReservationBlock(repeated, NoShowRule.blockedUntil(saleDate));
     }
 }

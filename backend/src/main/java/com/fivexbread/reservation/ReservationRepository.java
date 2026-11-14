@@ -49,6 +49,17 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     List<Long> findReservedIds(@Param("saleDate") LocalDate saleDate, @Param("limit") int limit);
 
     /**
+     * 아직 RESERVED 가 남은 판매일 (A-07 이어받기). 노쇼 처리를 못 한 지난 날을 찾는다.
+     * ix_resv_date_status (sale_date, status) 를 기간 범위로 읽는다. 기간을 7일로 묶어 쌓인 이력 전체를 훑지 않는다
+     */
+    @Query("""
+            select distinct r.saleDate from Reservation r
+            where r.saleDate between :from and :to and r.status = com.fivexbread.reservation.ReservationStatus.RESERVED
+            order by r.saleDate
+            """)
+    List<LocalDate> findSaleDatesWithReserved(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    /**
      * 후보를 PK 로 잠그고, 아직 RESERVED 인 것만 돌려준다 (A-07). 수령·취소도 PK 부터 잠가 같은 순서라 교착이 없다.
      * (sale_date, status) 인덱스로 바로 잠그면 인덱스 → PK 순서가 되어 수령·취소(PK → 인덱스)와 어긋난다.
      * SKIP LOCKED 는 쓰지 않는다. 건너뛴 행이 수령 롤백으로 RESERVED 로 남으면 후보에서도 빠질 수 있다.
