@@ -25,15 +25,42 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 public class StockRedisSync {
 
+    /**
+     * 잔여를 바꾼 스크립트의 끝에서 부르는 Lua 함수 (C-03, 13-3 3단계). 판매일 버전을 INCR 하고, 바뀐 빵의 지금 잔여를
+     * channel:stock:{판매일}로 발행한다. 값 변경·버전·발행이 한 스크립트라 서로 어긋나지 않고, Redis 가 스크립트를 하나씩 실행하므로
+     * 메시지는 버전 순서로 나간다. breadId 는 재고 키 끝(stock:{date}:{breadId})에서, 판매일은 버전 키의 해시태그에서 꺼낸다.
+     * 버전 키는 KEYS 로 받는다(Redis Cluster 에서 스크립트가 쓰는 키는 모두 KEYS 에 있어야 한다. 해시태그가 같아 같은 슬롯).
+     * 바뀐 빵이 없으면 버전을 올리지 않고 발행하지 않는다. 메시지 형식: {"saleDate", "version", "changes": [{"breadId", "remaining"}]}
+     */
+    public static final String LUA_PUBLISH_STOCK = """
+            local function publishStock(verKey, changedKeys)
+              if #changedKeys == 0 then return 0 end
+              local changes = {}
+              for i, key in ipairs(changedKeys) do
+                changes[i] = {breadId = tonumber(string.match(key, '(%d+)$')), remaining = tonumber(redis.call('GET', key))}
+              end
+              local version = redis.call('INCR', verKey)
+              if redis.call('PTTL', verKey) == -1 then
+                local ttl = redis.call('PTTL', changedKeys[1])
+                if ttl > 0 then redis.call('PEXPIRE', verKey, ttl) end
+              end
+              local date = string.match(verKey, '{(.-)}')
+              redis.call('PUBLISH', 'channel:stock:' .. date,          -- StockKeys.STOCK_CHANNEL_PREFIX
+                cjson.encode({saleDate = date, version = version, changes = changes}))
+              return version
+            end
+            """;
+
     /*
      * 줄이기: 키가 있는 빵의 잔여가 모두 줄일 양 이상일 때만 전부 DECRBY. 하나라도 모자라면 아무것도 바꾸지 않는다.
-     * KEYS: 재고 키들 / ARGV: [breadId, 줄일 양] 반복
+     * KEYS: 재고 키 n개 + 버전 키 / ARGV: [breadId, 줄일 양] 반복
      * 반환: {'OK', 줄인 breadId...} 또는 {'FAILED', 'breadId:잔여'...}
      */
     @SuppressWarnings("rawtypes")
-    private static final RedisScript<List> DECREASE = RedisScript.of("""
+    private static final RedisScript<List> DECREASE = RedisScript.of(LUA_PUBLISH_STOCK + """
+            local n = #KEYS - 1
             local fails = {}
-            for i = 1, #KEYS do
+            for i = 1, n do
               local remaining = redis.call('GET', KEYS[i])
               if remaining and tonumber(remaining) < tonumber(ARGV[i*2]) then
                 table.insert(fails, ARGV[i*2-1] .. ':' .. remaining)
@@ -44,25 +71,30 @@ public class StockRedisSync {
               return fails
             end
             local done = {'OK'}
-            for i = 1, #KEYS do
+            local changed = {}
+            for i = 1, n do
               if redis.call('EXISTS', KEYS[i]) == 1 then
                 redis.call('DECRBY', KEYS[i], ARGV[i*2])
                 table.insert(done, ARGV[i*2-1])
+                table.insert(changed, KEYS[i])
               end
             end
+            publishStock(KEYS[n+1], changed)
             return done
             """, List.class);
 
-    /* 늘리기·보상: 키가 있는 것만 INCRBY. KEYS: 재고 키들 / ARGV: 늘릴 양들 */
-    private static final RedisScript<Long> INCREASE = RedisScript.of("""
-            local changed = 0
-            for i = 1, #KEYS do
+    /* 줄이기 보상: 키가 있는 것만 INCRBY. KEYS: 재고 키 n개 + 버전 키 / ARGV: 늘릴 양들 */
+    private static final RedisScript<Long> INCREASE = RedisScript.of(LUA_PUBLISH_STOCK + """
+            local n = #KEYS - 1
+            local changed = {}
+            for i = 1, n do
               if redis.call('EXISTS', KEYS[i]) == 1 then
                 redis.call('INCRBY', KEYS[i], ARGV[i])
-                changed = changed + 1
+                table.insert(changed, KEYS[i])
               end
             end
-            return changed
+            publishStock(KEYS[n+1], changed)
+            return #changed
             """, Long.class);
 
     /*
@@ -99,13 +131,19 @@ public class StockRedisSync {
 
     /*
      * A-02 늘리기 (아웃박스 소비). applied 키를 SET NX 로 잡은 경우에만 적용해 같은 이벤트가 다시 와도 한 번만 더한다.
-     * KEYS: 재고 키 n개 + 적재 시각 키 n개 + applied 키 / ARGV: 이벤트 생성 시각(epoch 밀리초), applied TTL(초), 늘릴 양 n개
+     * KEYS: 재고 키 n개 + 적재 시각 키 n개 + applied 키 + 버전 키
+     * ARGV: 이벤트 생성 시각(epoch 밀리초), applied TTL(초), 늘릴 양 n개
      * 반환: 1 적용, 0 이미 적용한 이벤트
      */
-    private static final RedisScript<Long> INCREASE_ONCE = RedisScript.of(LUA_RESTORE_IF_LOADED_BEFORE + """
-            local n = (#KEYS - 1) / 2
-            if not redis.call('SET', KEYS[#KEYS], '1', 'NX', 'EX', ARGV[2]) then return 0 end
-            for i = 1, n do restoreIfLoadedBefore(KEYS[i], KEYS[n+i], ARGV[i+2], ARGV[1]) end
+    private static final RedisScript<Long> INCREASE_ONCE = RedisScript.of(
+            LUA_RESTORE_IF_LOADED_BEFORE + LUA_PUBLISH_STOCK + """
+            local n = (#KEYS - 2) / 2
+            if not redis.call('SET', KEYS[2*n+1], '1', 'NX', 'EX', ARGV[2]) then return 0 end
+            local changed = {}
+            for i = 1, n do
+              if restoreIfLoadedBefore(KEYS[i], KEYS[n+i], ARGV[i+2], ARGV[1]) == 1 then table.insert(changed, KEYS[i]) end
+            end
+            publishStock(KEYS[2*n+2], changed)
             return 1
             """, Long.class);
 
@@ -114,9 +152,9 @@ public class StockRedisSync {
      * SET 으로 덮지 않으므로 계산과 보정 사이에 들어온 예약의 차감이 그대로 남는다 (13-1 Q3 꼬리 2).
      * 적재 시각을 바꾸는 이유: 보정값에는 이미 커밋된 변경이 모두 들어 있으므로, 아직 처리되지 않은 아웃박스 이벤트가
      * 나중에 같은 변경을 또 더하지 않게 한다("아웃박스 지연 처리와 재적재"와 같은 규칙). 적재 시각 키의 만료는 재고 키와 같게.
-     * KEYS: 재고 키, 적재 시각 키 / ARGV: 차이, 지금(epoch 밀리초) / 반환: 보정 뒤 잔여, 키가 없으면 nil
+     * KEYS: 재고 키, 적재 시각 키, 버전 키 / ARGV: 차이, 지금(epoch 밀리초) / 반환: 보정 뒤 잔여, 키가 없으면 nil
      */
-    private static final RedisScript<Long> ADJUST = RedisScript.of("""
+    private static final RedisScript<Long> ADJUST = RedisScript.of(LUA_PUBLISH_STOCK + """
             if redis.call('EXISTS', KEYS[1]) == 0 then return false end
             local after = redis.call('INCRBY', KEYS[1], ARGV[1])
             local ttl = redis.call('PTTL', KEYS[1])
@@ -125,6 +163,7 @@ public class StockRedisSync {
             else
               redis.call('SET', KEYS[2], ARGV[2])
             end
+            if tonumber(ARGV[1]) ~= 0 then publishStock(KEYS[3], {KEYS[1]}) end
             return after
             """, Long.class);
 
@@ -192,6 +231,7 @@ public class StockRedisSync {
             args.add(String.valueOf(breadId));
             args.add(String.valueOf(amount));
         });
+        keys.add(StockKeys.version(saleDate));
         List<?> result = redisTemplate.execute(DECREASE, keys, args.toArray());
         List<String> values = result.stream().map(String::valueOf).toList();
         if ("OK".equals(values.get(0))) {
@@ -225,6 +265,7 @@ public class StockRedisSync {
         });
         keys.addAll(loadedKeys);
         keys.add(StockKeys.applied(saleDate, eventId));
+        keys.add(StockKeys.version(saleDate));
         return Long.valueOf(1).equals(redisTemplate.execute(INCREASE_ONCE, keys, args.toArray()));
     }
 
@@ -236,7 +277,7 @@ public class StockRedisSync {
      */
     public Long adjust(LocalDate saleDate, long breadId, int delta) {
         return redisTemplate.execute(ADJUST,
-                List.of(StockKeys.stock(saleDate, breadId), StockKeys.loadedAt(saleDate, breadId)),
+                List.of(StockKeys.stock(saleDate, breadId), StockKeys.loadedAt(saleDate, breadId), StockKeys.version(saleDate)),
                 String.valueOf(delta), String.valueOf(StockKeys.epochMillis(LocalDateTime.now(clock))));
     }
 
@@ -251,6 +292,7 @@ public class StockRedisSync {
             keys.add(StockKeys.stock(saleDate, breadId));
             args.add(String.valueOf(amount));
         });
+        keys.add(StockKeys.version(saleDate));
         redisTemplate.execute(INCREASE, keys, args.toArray());
     }
 

@@ -41,6 +41,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/error").permitAll()     // 오류 포워드가 401로 덮이지 않게
                         .requestMatchers("/actuator/health/**").permitAll()
+                        // WebSocket 핸드셰이크(C-03). 인증은 STOMP CONNECT 프레임에서 StompAuthInterceptor 가 한다
+                        .requestMatchers(HttpMethod.GET, "/ws").permitAll()
                         .requestMatchers(SWAGGER).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/members").permitAll()        // 가입: HTTP 메서드를 GET 까지 열 경우 로그인 없이도 정보가 열릴 수 있음
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/tokens").permitAll()    // 로그인
