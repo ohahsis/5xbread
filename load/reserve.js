@@ -5,7 +5,10 @@
 // - 로그인(BCrypt)을 예약과 같은 순간에 하지 않도록 기다리는 시간을 두어, 예약 요청만 한꺼번에 몰리게 한다
 // - 토큰은 VU 안에서만 쓰고 출력하지 않는다
 //
-// 환경 변수: BASE_URL, SALE_DATE, PICKUP_SLOT_ID, BREAD_ID, APP_IPS("app1=172.18.0.5,app2=...")
+// CANCEL=1 (run.sh --with-cancel): 예약과 취소를 섞는다. 201 을 받은 손님 중 번호가 홀수면 바로 취소하고,
+// 409 를 받은 손님은 1~2초 뒤 한 번 더 예약한다(취소표 줍기). 취소의 Redis 복구(아웃박스)와 예약이 겹친다
+//
+// 환경 변수: BASE_URL, SALE_DATE, PICKUP_SLOT_ID, BREAD_ID, APP_IPS("app1=172.18.0.5,app2=..."), CANCEL
 import http from 'k6/http';
 import exec from 'k6/execution';
 import { check, sleep } from 'k6';
@@ -15,6 +18,7 @@ const BASE_URL = __ENV.BASE_URL || 'http://nginx:8081';   // 8081: X-Upstream �
 const SALE_DATE = __ENV.SALE_DATE;
 const PICKUP_SLOT_ID = Number(__ENV.PICKUP_SLOT_ID);
 const BREAD_ID = Number(__ENV.BREAD_ID || 1);
+const CANCEL = __ENV.CANCEL === '1';
 const PASSWORD = 'Load-test-2026!';            // load/seed.sql 의 부하 테스트 손님 공통 비밀번호
 const USERS = 1000;
 const LOGIN_WINDOW_SECONDS = 60;               // 이 시간 안에 모두 로그인하고, 끝나는 순간 다 같이 예약
@@ -35,6 +39,13 @@ const appCounters = {
   app3: new Counter('upstream_app3'),
 };
 const unknownApp = new Counter('upstream_unknown');
+const cancel200 = new Counter('cancel_200');
+const cancelOther = new Counter('cancel_other');
+const retryCounters = {
+  201: new Counter('retry_201'),
+  409: new Counter('retry_409'),
+};
+const retryOther = new Counter('retry_other');
 
 export const options = {
   scenarios: {
@@ -65,12 +76,7 @@ export default function () {
     sleep(wait);
   }
 
-  const res = http.post(`${BASE_URL}/api/v1/reservations`,
-      JSON.stringify({ saleDate: SALE_DATE, pickupSlotId: PICKUP_SLOT_ID, items: [{ breadId: BREAD_ID, quantity: 1 }] }),
-      {
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'Idempotency-Key': uuidv4() },
-        tags: { name: 'reserve' },
-      });
+  const res = reserve(token, 'reserve');
   check(res, { '201 or 409': (r) => r.status === 201 || r.status === 409 });
 
   (statusCounters[res.status] || otherStatus).add(1);
@@ -82,6 +88,39 @@ export default function () {
   }
   const app = APPS[res.headers['X-Upstream']];
   (appCounters[app] || unknownApp).add(1);
+
+  if (!CANCEL) {
+    return;
+  }
+  if (res.status === 201 && vu % 2 === 1) {
+    const canceled = http.patch(`${BASE_URL}/api/v1/reservations/${res.json('reservationId')}`,
+        JSON.stringify({ status: 'CANCELED' }),
+        { headers: { 'Content-Type': 'application/merge-patch+json', Authorization: `Bearer ${token}` },
+          tags: { name: 'cancel' } });
+    (canceled.status === 200 ? cancel200 : cancelOther).add(1);
+    countServerError(canceled, 'cancel');
+  } else if (res.status === 409) {
+    sleep(1 + Math.random());
+    const retry = reserve(token, 'retry');
+    (retryCounters[retry.status] || retryOther).add(1);
+    countServerError(retry, 'retry');
+  }
+}
+
+function reserve(token, name) {
+  return http.post(`${BASE_URL}/api/v1/reservations`,
+      JSON.stringify({ saleDate: SALE_DATE, pickupSlotId: PICKUP_SLOT_ID, items: [{ breadId: BREAD_ID, quantity: 1 }] }),
+      {
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'Idempotency-Key': uuidv4() },
+        tags: { name },
+      });
+}
+
+function countServerError(res, name) {
+  if (res.status >= 500) {
+    serverError.add(1);
+    console.warn(`${name} 5xx status=${res.status} code=${safeCode(res)}`);
+  }
 }
 
 function safeCode(res) {
@@ -121,6 +160,13 @@ export function handleSummary(data) {
       app3: count('upstream_app3'),
       unknown: count('upstream_unknown'),
     },
+    cancel: CANCEL ? {
+      ok200: count('cancel_200'),
+      cancelOther: count('cancel_other'),
+      retry201: count('retry_201'),
+      retry409: count('retry_409'),
+      retryOther: count('retry_other'),
+    } : null,
     reserveDurationMs: trend('http_req_duration{name:reserve}'),
     loginDurationMs: trend('http_req_duration{name:login}'),
   };

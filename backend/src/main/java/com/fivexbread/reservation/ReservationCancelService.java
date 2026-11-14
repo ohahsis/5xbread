@@ -2,6 +2,7 @@ package com.fivexbread.reservation;
 
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
+import com.fivexbread.common.outbox.Outbox;
 import com.fivexbread.reservation.Reservation.Cancellation;
 import com.fivexbread.reservation.ReservationResponse.ItemResponse;
 import com.fivexbread.saledate.DailyStockRepository;
@@ -18,7 +19,8 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 예약 취소 DB 트랜잭션 (13-2 3·4단계, C-06·A-08). Redis 는 부르지 않는다 (ReservationCancelFacade 가 커밋 후 복구).
+ * 예약 취소 DB 트랜잭션 (13-2 3·4단계, C-06·A-08). Redis 는 부르지 않는다. Redis 복구는 같은 트랜잭션에
+ * outbox_event(STOCK_RELEASE)로 적고, 커밋 후 ReservationCancelFacade 가 바로 처리한다(못 하면 폴러).
  * 도메인(Reservation.cancel)이 판단하고, 조건부 UPDATE 가 확정한다.
  */
 @Service
@@ -29,16 +31,15 @@ public class ReservationCancelService {
     private final DailyStockRepository dailyStockRepository;
     private final ReservationItems reservationItems;
     private final JdbcTemplate jdbcTemplate;
+    private final Outbox outbox;
     private final Clock clock;
 
     /** 취소할 예약의 판매일·손님. 커밋 전에 Redis user_qty 세대를 읽어 두려고 먼저 찾는다 */
     record Target(LocalDate saleDate, long memberId) {
     }
 
-    /**
-     * @param quantities 되돌린 수량 (breadId 오름차순)
-     */
-    record Canceled(ReservationResponse response, LocalDate saleDate, long memberId, Map<Long, Integer> quantities) {
+    /** @param outboxEventId Redis 복구 이벤트(STOCK_RELEASE) id. 커밋 후 OutboxRelay.publish 에 넘긴다 */
+    record Canceled(ReservationResponse response, long outboxEventId) {
     }
 
     @Transactional(readOnly = true)
@@ -47,8 +48,9 @@ public class ReservationCancelService {
         return new Target(reservation.getSaleDate(), reservation.getMemberId());
     }
 
+    /** @param generation 커밋 전에 읽어 둔 user_qty 세대(없으면 null). 이벤트에 담아 복구 때 비교한다 */
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public Canceled cancel(long reservationId, ReservationActor actor, String reason) {
+    public Canceled cancel(long reservationId, ReservationActor actor, String reason, String generation) {
         Reservation reservation = find(reservationId, actor);
         Cancellation cancellation = reservation.cancel(actor, LocalDateTime.now(clock), reason);
         if (reservationRepository.cancelIfReserved(reservationId, cancellation.canceledAt(),
@@ -73,8 +75,11 @@ public class ReservationCancelService {
                 reservationId, ReservationStatus.RESERVED.name(), ReservationStatus.CANCELED.name(),
                 cancellation.canceledBy(), cancellation.canceledAt());
 
+        long eventId = outbox.append(StockReleaseEvent.TYPE, new StockReleaseEvent(reservationId,
+                reservation.getSaleDate(), reservation.getMemberId(), quantities, generation));
+
         ReservationResponse response = ReservationResponse.canceled(reservation, cancellation.canceledAt(), items);
-        return new Canceled(response, reservation.getSaleDate(), reservation.getMemberId(), quantities);
+        return new Canceled(response, eventId);
     }
 
     // 손님은 본인 예약만. 남의 예약과 없는 예약을 구분하지 않고 404 (13-2 2단계)

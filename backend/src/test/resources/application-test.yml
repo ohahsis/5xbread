@@ -8,3 +8,6 @@ fivexbread:
     ttl: 0s                       # DB 를 직접 바꾸는 테스트가 많아 기본은 캐시 없음. 캐시 동작은 SaleBreadsCacheApiTest 가 30초로 본다
   no-show:
     cron: "-"                     # 테스트는 메서드를 직접 호출한다. 실제 21:00 에 돌던 테스트와 겹치지 않게 끈다
+  outbox:
+    relay-cron: "-"               # 테스트는 폴러를 직접 호출한다. 주기 실행이 테스트 중간에 끼어들지 않게 끈다
+    cleanup-cron: "-"

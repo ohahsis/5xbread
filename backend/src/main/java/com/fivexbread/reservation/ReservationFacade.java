@@ -80,7 +80,11 @@ public class ReservationFacade {
         }
     }
 
-    /** 보상도 실패하면 Redis 잔여가 DB 보다 적은 "덜 팔리는" 방향으로 남는다. 3단계 N-05 가 바로잡는다 */
+    /**
+     * 보상도 실패하면 Redis 잔여가 DB 보다 적은 "덜 팔리는" 방향으로 남는다. 3단계 N-05 가 바로잡는다.
+     * 아웃박스 대상이 아니다: DB 트랜잭션이 롤백돼 outbox_event 를 함께 커밋할 수 없고(기록할 사실이 없음),
+     * 되돌릴 대상은 이 요청이 방금 Redis 에서 뺀 수량이라 같은 요청 안에서 바로 되돌린다.
+     */
     private void compensate(ReservationPlan plan, String generation) {
         Map<Long, Integer> quantities = new LinkedHashMap<>();
         plan.items().forEach(item -> quantities.put(item.breadId(), item.quantity()));

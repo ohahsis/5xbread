@@ -263,7 +263,7 @@ class ReservationCancelApiTest extends IntegrationTestSupport {
             redis.delete(StockKeys.userQty(date, member));
             assertThat(post(member, Map.of(3L, 1)).getStatusCode()).isEqualTo(HttpStatus.CREATED);
             return invocation.callRealMethod();
-        }).doCallRealMethod().when(stockStore).release(any(), anyLong(), any(), any());
+        }).doCallRealMethod().when(stockStore).releaseOnce(anyLong(), any(), any(), anyLong(), any(), any());
 
         assertThat(cancel(member, canceled).getStatusCode()).isEqualTo(HttpStatus.OK);
 

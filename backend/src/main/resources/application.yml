@@ -55,6 +55,13 @@ fivexbread:
     # 부록 B: 매일 21:00 (zone 은 NoShowJob 의 Asia/Seoul). store.close-time 을 늦추면 이 시각도 함께 늦춰야 한다.
     # 앞서면 아직 픽업할 수 있는 예약이 노쇼가 된다. "-" 면 스케줄을 끈다
     cron: ${NO_SHOW_CRON:0 0 21 * * *}
+  outbox:
+    relay-cron: ${OUTBOX_RELAY_CRON:*/5 * * * * *}   # 폴러 주기. 앱 3개가 같은 초에 깨어나 ShedLock 을 잡은 1개만 돈다. "-" 면 끈다
+    relay-delay: 10s              # 생성 후 이 시간이 지난 행만 폴러가 집는다. 커밋 후 바로 처리(평소 수 ms, Redis 시간 제한 2초)와 겹치지 않게
+    batch-size: 100
+    max-batches: 10               # 폴러 1회 최대 1,000건. 나머지는 다음 주기(5초 뒤)
+    cleanup-cron: ${OUTBOX_CLEANUP_CRON:0 30 4 * * *}   # 매일 04:30 발행한 행 정리
+    retention: 7d                 # 발행한 행 보관 기간 (decisions.md 6장 "아웃박스 정리")
   signup:
     daily-limit-per-ip: 10        # AU-02, 부록 B
     terms-version: "v1"           # 서비스 이용약관
