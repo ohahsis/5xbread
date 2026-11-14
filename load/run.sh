@@ -3,6 +3,7 @@
 # 먼저 앱 3개를 띄운다: docker compose -f compose.full.yaml up -d --build --wait
 # 실행(레포 루트에서): ./load/run.sh              → 하나라도 틀리면 exit 1
 #                     ./load/run.sh --check-only → 데이터를 다시 넣거나 요청을 보내지 않고, 지금 DB·Redis 만 판정
+#                     ./load/run.sh --with-cancel → 예약과 취소를 섞는다(reserve.js CANCEL=1). 아웃박스 미발행 행 0 도 판정
 #
 # 1) 테스트 판매일(10일 뒤)의 이전 결과를 지우고 seed.sql 로 손님 1,000명·판매일·재고를 다시 넣는다
 # 2) 그 판매일의 Redis 키를 지운다 (첫 예약 때 DB 기준으로 다시 적재된다)
@@ -16,7 +17,9 @@ COMPOSE=(docker compose -f compose.full.yaml)
 BREAD_ID=1
 USERS=1000
 CHECK_ONLY=false
+WITH_CANCEL=false
 [[ "${1:-}" == "--check-only" ]] && CHECK_ONLY=true
+[[ "${1:-}" == "--with-cancel" ]] && WITH_CANCEL=true
 
 # 비밀번호는 컨테이너 안의 환경 변수로만 쓴다 (명령줄·출력에 남기지 않음)
 sql() {
@@ -42,6 +45,7 @@ if ! $CHECK_ONLY; then
 
   K6_OUT=$("${COMPOSE[@]}" run --rm --no-deps --quiet-pull \
     -e SALE_DATE="$SALE_DATE" -e PICKUP_SLOT_ID="$PICKUP_SLOT_ID" -e BREAD_ID="$BREAD_ID" -e APP_IPS="$APP_IPS" \
+    -e CANCEL="$($WITH_CANCEL && echo 1 || echo 0)" \
     k6 run --quiet /load/reserve.js 2>&1 | grep -v -E "^ ?Container " || true)
   echo "$K6_OUT"
   RESULT=$(echo "$K6_OUT" | grep '^RESULT ' || true)
@@ -51,6 +55,17 @@ fi
 result() {
   echo "$RESULT" | grep -o "\"$1\":[0-9]*" | head -1 | cut -d: -f2
 }
+
+# 취소 복구는 커밋 후 바로 처리되고, 실패한 것은 폴러(5초 주기, 생성 후 10초)가 처리한다. 미발행 행이 0 이 될 때까지 최대 30초 기다린다
+pending_outbox() {
+  echo "SELECT COUNT(*) FROM outbox_event WHERE published_at IS NULL;" | sql
+}
+if $WITH_CANCEL; then
+  for _ in $(seq 1 30); do
+    [[ "$(pending_outbox)" == "0" ]] && break
+    sleep 1
+  done
+fi
 
 read -r RESERVABLE RESERVED ITEM_SUM <<< "$(sql <<SQL
 SELECT s.reservable_qty, s.reserved_qty,
@@ -80,9 +95,20 @@ check "Redis 잔여 = reservable_qty − reserved_qty" "$REDIS_STOCK" -eq "$(( $
 if ! $CHECK_ONLY; then
   CREATED=$(result created201)
   CONFLICT=$(result conflict409)
-  check "201 개수 = reserved_qty (1건당 1개)" "$CREATED" -eq "$RESERVED"
   check "5xx 0건" "$(result serverError5xx)" -eq 0
   check "응답 ${USERS}건 모두 201 또는 409" "$(( ${CREATED:-0} + ${CONFLICT:-0} ))" -eq "$USERS"
+  if $WITH_CANCEL; then
+    CANCELED=$(result ok200)
+    RETRY_CREATED=$(result retry201)
+    CANCELED_DB=$(echo "SELECT COUNT(*) FROM reservation WHERE sale_date = '$SALE_DATE' AND status = 'CANCELED';" | sql)
+    echo "취소 ${CANCELED}건, 다시 예약 성공 ${RETRY_CREATED}건, 다시 예약 409 $(result retry409)건"
+    check "취소 200 = DB CANCELED" "$CANCELED" -eq "$CANCELED_DB"
+    check "취소·다시 예약 응답에 예상 밖 상태 없음" "$(( $(result cancelOther) + $(result retryOther) ))" -eq 0
+    check "201 − 취소 = reserved_qty" "$(( ${CREATED:-0} + ${RETRY_CREATED:-0} - ${CANCELED:-0} ))" -eq "$RESERVED"
+    check "아웃박스 미발행 행 0" "$(pending_outbox)" -eq 0
+  else
+    check "201 개수 = reserved_qty (1건당 1개)" "$CREATED" -eq "$RESERVED"
+  fi
 fi
 
 if [[ $FAILED -ne 0 ]]; then
