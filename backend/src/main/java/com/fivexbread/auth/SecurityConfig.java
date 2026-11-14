@@ -1,6 +1,7 @@
 package com.fivexbread.auth;
 
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -18,6 +19,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
  * 필터 단계의 401·403도 ApiExceptionHandler 로 넘겨 다른 오류와 같은 ProblemDetail 형식으로 응답한다.
  */
 @Configuration
+@EnableConfigurationProperties(PasswordHashProperties.class)   // @WebMvcTest 처럼 스캔하지 않는 슬라이스에서도 인코더를 만들 수 있게
 public class SecurityConfig {
 
     private static final String[] SWAGGER = {"/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**"};
@@ -58,7 +60,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(10);                     // AU-04, 부록 B: cost 10 고정
+    public PasswordEncoder passwordEncoder(PasswordHashProperties properties) {
+        // AU-04, 부록 B: cost 10 고정. 동시 계산 수 제한은 BoundedPasswordEncoder 참고
+        return new BoundedPasswordEncoder(new BCryptPasswordEncoder(10), properties.permits());
     }
 }
