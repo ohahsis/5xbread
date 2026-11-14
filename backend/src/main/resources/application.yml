@@ -25,6 +25,10 @@ spring:
 
 server:
   shutdown: graceful
+  tomcat:
+    # 연결 대기열(listen backlog). 기본 100이면 재시작 직후 로그인 폭주 때 앱마다 수백 건의 SYN 이 버려지고,
+    # 재전송이 Nginx proxy_connect_timeout(2s)을 넘기면 그 앱이 10초 동안 빠진다 (decisions.md "재시작 직후 로그인 폭주")
+    accept-count: 1000
   forward-headers-strategy: native   # Nginx 뒤에서 X-Forwarded-For 읽기 (정의서 13-5)
 
 fivexbread:
@@ -38,6 +42,8 @@ fivexbread:
     max-failures: 5               # AU-05, 부록 B: 연속 5회 실패하면
     failure-retention: 24h        # 실패 카운터 정리용 TTL, 실패할 때마다 갱신 (decisions.md 6장)
     lock-duration: 10m            # 5번째 실패부터 10분 잠금
+  password-hash:
+    max-concurrency: ${PASSWORD_HASH_MAX_CONCURRENCY:0}   # 앱 1개의 BCrypt 동시 계산 상한. 0이면 CPU 수 (BoundedPasswordEncoder)
   admin:
     initial-phone: ${ADMIN_INITIAL_PHONE:}         # 사장님 초기 계정 (decisions.md 2장). 비어 있으면 경고만 남기고 만들지 않음
     initial-password: ${ADMIN_INITIAL_PASSWORD:}   # 저장소에 넣지 않음. BCrypt 해시만 저장, 첫 로그인 때 변경 강제
