@@ -47,7 +47,7 @@ public class SaleBreadsFacade {
                 .status(LocalDateTime.now(clock));
         List<SaleBreadRow> rows = catalogCache.breads(date);
         if (rows.isEmpty()) {
-            return new SaleBreadsResponse(date, status, List.of());
+            return new SaleBreadsResponse(date, status, 0, List.of());
         }
 
         List<Long> breadIds = rows.stream().map(SaleBreadRow::breadId).toList();
@@ -65,7 +65,7 @@ public class SaleBreadsFacade {
                 })
                 .sorted(SOLD_OUT_LAST)
                 .toList();
-        return new SaleBreadsResponse(date, status, breads);
+        return new SaleBreadsResponse(date, status, snapshot.version(), breads);
     }
 
     private Snapshot read(LocalDate date, List<Long> breadIds, Long memberId) {

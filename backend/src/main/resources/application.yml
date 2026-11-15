@@ -73,6 +73,13 @@ fivexbread:
     min-gap: 4m                   # 같은 차이를 2회로 세는 최소 간격. 주기(5분)보다 조금 짧게
     observation-ttl: 7m           # 첫 관측 보관. 다음 회차까지는 남고, 한 회차를 건너뛰면 처음부터 다시 센다
     manual-confirm-delay: 1s      # A-12 재계산의 두 관측 간격 (진행 중인 예약을 거른다)
+  realtime:                       # C-03 실시간 잔여 (13-3)
+    allowed-origins: ${REALTIME_ALLOWED_ORIGINS:}   # 화면 출처(https://bakery.example). 비우면 같은 출처만. 화면은 2차
+    flush-interval: 200ms         # 13-3 5단계: 앱마다 빵별 최신 값을 모아 200ms마다 한 번
+    heartbeat: 10s                # Nginx /ws proxy_read_timeout(3600s)보다 짧게
+    send-time-limit: 10s          # 13-3 어필: 느린 클라이언트는 연결을 끊는다
+    send-buffer-size-limit: 512KB
+    listener-queue-capacity: 10000   # Redis 메시지 대기열. 차면 오래된 것부터 버린다(다음 메시지가 절대값이라 맞춰짐)
   signup:
     daily-limit-per-ip: 10        # AU-02, 부록 B
     terms-version: "v1"           # 서비스 이용약관

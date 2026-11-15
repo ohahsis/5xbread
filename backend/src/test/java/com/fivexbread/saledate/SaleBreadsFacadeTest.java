@@ -74,7 +74,7 @@ class SaleBreadsFacadeTest {
     @Test
     void Redis가_복구되면_다시_Redis_값을_쓴다() {
         when(reader.read(DATE, IDS, null)).thenThrow(new RedisConnectionFailureException("down"))
-                .thenReturn(new Snapshot(Map.of(1L, 5, 2L, 1), null));
+                .thenReturn(new Snapshot(7, Map.of(1L, 5, 2L, 1), null));
 
         facade.breads(DATE, null);
 

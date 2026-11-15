@@ -51,6 +51,19 @@ public final class StockKeys {
         return "reconcile_seen:{" + saleDate + "}:" + breadId;
     }
 
+    /**
+     * 판매일 잔여 버전 (C-03, 13-3 3단계). 잔여를 바꾸는 Lua 가 같은 스크립트에서 INCR 하고 바뀐 잔여와 함께 발행한다
+     * (StockRedisSync.LUA_PUBLISH_STOCK). 손님 목록 응답의 version 도 이 값이라, 화면은 목록보다 큰 버전의 메시지만 적용한다.
+     * 키가 없으면 0. 만료는 처음 만들 때 바뀐 재고 키와 같게(판매일 다음 날 0시).
+     */
+    public static String version(LocalDate saleDate) {
+        return "stockver:{" + saleDate + "}";
+    }
+
+    /** 잔여 변경 Pub/Sub 채널 (C-03). 앱마다 STOCK_CHANNEL_PATTERN 으로 모든 판매일을 구독한다. Lua(LUA_PUBLISH_STOCK)에도 같은 문자열 */
+    public static final String STOCK_CHANNEL_PREFIX = "channel:stock:";
+    public static final String STOCK_CHANNEL_PATTERN = STOCK_CHANNEL_PREFIX + "*";
+
     /** Lua 에서 비교할 epoch 밀리초 (KST LocalDateTime → 시각) */
     public static long epochMillis(LocalDateTime time) {
         return time.atZone(KST).toInstant().toEpochMilli();

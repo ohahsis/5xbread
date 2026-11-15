@@ -24,6 +24,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.connection.MessageListener;
@@ -64,6 +65,7 @@ class SaleBreadsCacheApiTest extends IntegrationTestSupport {
     SaleCatalogCache catalogCache;
 
     @Autowired
+    @Qualifier("catalogCacheListenerContainer")                 // C-03 의 stockListenerContainer 와 구분
     RedisMessageListenerContainer listenerContainer;
 
     @Autowired
