@@ -97,7 +97,7 @@ public class ReservationFacade {
     }
 
     /**
-     * 커밋 후 처리를 모으는 곳. 3단계에서 잔여 변경 발행(C-03 Pub/Sub)을 여기에 붙인다.
+     * 커밋 후 처리를 모으는 곳. 잔여 변경 발행(C-03)은 여기가 아니라 차감 Lua 안에서 한다.
      * 예약은 이미 저장됐으므로 여기서 실패해도 201 을 돌려준다. 같은 키 재요청은 처리 중(409)으로 보이다가 24시간 뒤 풀린다.
      */
     private void afterCommit(String idempotencyKey, String fingerprint, String location, ReservationResponse response) {
