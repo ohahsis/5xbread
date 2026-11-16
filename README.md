@@ -110,6 +110,10 @@ v1은 **재고·한도 검사를 DB로** 하는 방식(`RESERVATION_MODE=db-only
 - **v2가 나은 곳은 동시 1,000건뿐**입니다(p95 −29%, 처리량 +42%). 매진으로 끝나는 요청을 Redis에서 끊어 DB 쓰기를 줄이기 때문입니다. 모든 요청이 성공하는 spread에서는 v2가 오히려 조금 느렸고(범위가 겹침), hot 150/s에서는 둘 다 버텼습니다. 업무 규칙 검사가 Redis 앞에서 요청마다 DB를 읽어 두 방식 모두 Hikari 풀(앱당 10)이 먼저 찹니다
 - N을 정한 방법, 측정별 값, 측정의 한계: [`docs/measurements/2026-11-16-reservation-v1-v2.md`](docs/measurements/2026-11-16-reservation-v1-v2.md), 해석: decisions.md 6장 "예약 v1/v2 비교"
 
+| v1 (재고·한도 검사를 DB로) | v2 (Redis Lua) |
+|---|---|
+| ![burst v1](docs/measurements/images/burst-v1.png) | ![burst v2](docs/measurements/images/burst-v2.png) |
+
 ## 1차 범위
 
 decisions.md 4장이 기준입니다. 요약:

@@ -3,7 +3,7 @@
 - v1: `fivexbread.reservation.mode=db-only`. 재고·1인 한도·하루 건수 검사를 DB로 한다(회원 행 `FOR UPDATE` → 건수·합계 → 조건부 UPDATE). 요청 제한·Idempotency·예약번호는 v2와 같이 Redis를 쓴다
 - v2: `redis`(기본·운영). Redis Lua로 검사·차감 → DB 조건부 UPDATE로 확정
 - 해석과 결정: `docs/decisions.md` 6장 "예약 v1/v2 비교"·"예약 측정 모드"
-- 원본: `load/compare.sh`가 만든 `load/results/20261116-160918/`(k6 summary JSON, `prometheus.tsv`, `summary.md`. 저장소에는 넣지 않음). Grafana 스크린샷은 `docs/measurements/images/`에 직접 캡처해 넣는다
+- 원본: `load/compare.sh`가 만든 `load/results/20261116-160918/`(k6 summary JSON, `prometheus.tsv`, `summary.md`. 저장소에는 넣지 않음). Grafana 스크린샷은 `docs/measurements/images/`(아래 "Grafana", burst 비교는 README)
 
 ## 환경
 
@@ -71,6 +71,16 @@ Mac(Intel i7-9750H 6코어 12스레드, 32GB), macOS 26.7, Docker Desktop 29.8.2
 | v2-r2 burst / spread / hot | 2,147 / 2,791 / 9 | 2,695 / 4,491 / 649 | 357.1 / 346.7 / 149.3 | 0 / 9,201 / 39 | 188 / 190 / 32 |
 | v1-r3 burst / spread / hot | 2,632 / 2,613 / 11 | 3,890 / 3,791 / 50 | 237.4 / 375.6 / 150.0 | 0 / 7,462 / 0 | 186 / 190 / 11 |
 | v2-r3 burst / spread / hot | 2,113 / 2,300 / 8 | 2,764 / 3,474 / 44 | 335.9 / 432.8 / 150.0 | 0 / 4,035 / 0 | 187 / 189 / 0 |
+
+### Grafana
+
+전체 측정 구간(2026-11-16 16:09~17:03 KST, `POST /api/v1/reservations`). 라운드 6개(v1 v2 v1 v2 v1 v2)마다 워밍업 → burst → spread → hot이 이어진다. 5xx는 내내 0이다.
+
+![대시보드 전체](images/overview.png)
+
+HikariCP pending(앱별). 라운드마다 워밍업·burst·spread 구간에서 두 모드 모두 앱마다 약 185까지 쌓이고, hot 구간에서는 거의 0이다. 두 방식 모두 커넥션 풀이 먼저 찬다는 해석의 근거다.
+
+![HikariCP active·pending](images/hikari-pending.png)
 
 ## 측정의 한계
 
