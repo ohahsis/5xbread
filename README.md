@@ -7,7 +7,7 @@
 
 ## 스택
 
-Java 21, Spring Boot 3.5.16, Gradle 8.14(Kotlin DSL), MySQL 8, Redis 7, Flyway, Spring Security + JWT, STOMP WebSocket, Caffeine, ShedLock, Nginx, Testcontainers, k6(부하 확인), GitHub Actions
+Java 21, Spring Boot 3.5.16, Gradle 8.14(Kotlin DSL), MySQL 8, Redis 7, Flyway, Spring Security + JWT, STOMP WebSocket, Caffeine, ShedLock, Nginx, Micrometer + Prometheus·Grafana, Testcontainers, k6(부하 확인), GitHub Actions
 
 ## 구조
 
@@ -61,6 +61,12 @@ docker compose -f compose.full.yaml down        # 데이터까지 지우려면 -
 
 개발용 `compose.yaml`과 프로젝트 이름·볼륨이 달라 함께 띄워도 섞이지 않습니다. MySQL·Redis 포트는 호스트에 열지 않습니다. 앱 1개당 메모리 768MB(힙 75%).
 
+메트릭까지 보려면 `--profile monitoring`을 붙입니다. Prometheus `http://127.0.0.1:9090`, Grafana `http://127.0.0.1:3000`(대시보드 "5XBread 예약 v1/v2": 요청 p50·p95·p99, 초당 처리 수, HikariCP active·pending, Redis 명령 시간, 5xx). 앱의 `/actuator/prometheus`는 compose 네트워크 안에서만 열리고 Nginx는 `/actuator`를 404로 막습니다.
+
+```bash
+docker compose -f compose.full.yaml --profile monitoring up -d --build --wait
+```
+
 ### 3. 부하·정합성 확인 (앱 3개를 띄운 뒤, 루트에서)
 
 | 명령 | 하는 일 | 판정 (하나라도 틀리면 exit 1) |
@@ -69,7 +75,10 @@ docker compose -f compose.full.yaml down        # 데이터까지 지우려면 -
 | `./load/run.sh --with-cancel` | 같은 예약에 취소와 다시 예약을 섞음 | 위 판정 + 취소 200 = DB 취소 건수, 201 − 취소 = 예약 수량, 아웃박스 미발행 0 |
 | `./load/realtime-check.sh` | STOMP 리스너 6개(앱 3개에 나뉨) + 예약 3건 | 모든 리스너가 버전 1·2·3을 순서대로 받고, 마지막 잔여 = Redis = 목록, 다른 앱이 처리한 예약도 받음 |
 
-테스트 손님은 운영 마이그레이션에 넣지 않고 이 스크립트들만 넣습니다(판매일은 10일 뒤).
+| `./load/steady.sh --scenario spread\|hot --rate N` | 손님 10,000명(`load/seed-steady.sql`)이 초당 N건을 60초 동안. spread는 판매일 5 × 빵 20종, hot은 한 빵(총량 500)에 몰림 | 판매일·빵마다 예약 수량 = 예약 합 ≤ 총량, Redis 잔여 = DB(v2). 5xx·dropped는 결과로만 |
+| `./load/compare.sh --rate-spread N --rate-hot M` | 예약 v1(`RESERVATION_MODE=db-only`) ↔ v2를 번갈아 3라운드, 워밍업 1회 버림. 모니터링 profile 필요 | 위 판정. 결과는 `load/results/{시각}/`(k6 summary JSON, Prometheus 값, `summary.md`) |
+
+테스트 손님은 운영 마이그레이션에 넣지 않고 이 스크립트들만 넣습니다(판매일은 `run.sh` 10일 뒤, `steady.sh` 20일 뒤부터 5일).
 
 ## 측정값 (1차 마무리, 2026-11-16, main `3849e0b`)
 
@@ -83,6 +92,24 @@ docker compose -f compose.full.yaml down        # 데이터까지 지우려면 -
 
 응답 시간은 노트북 한 대에서 1,000명이 같은 순간에 로그인(BCrypt)과 예약을 몰아 보낸 값이라 처리량 지표가 아닙니다. 이 측정이 보이는 것은 정합성입니다. 로그인이 느린 이유와 BCrypt 동시 계산 제한은 decisions.md 6장 "재시작 직후 로그인 폭주"에 있습니다.
 
+## 예약 v1/v2 비교 (2026-11-16)
+
+v1은 **재고·한도 검사를 DB로** 하는 방식(`RESERVATION_MODE=db-only`, 측정 전용)입니다. 요청 제한·Idempotency·예약번호는 v2와 같이 Redis를 씁니다. v2는 지금 구조(Redis Lua → DB 조건부 UPDATE)입니다. `./load/compare.sh --rate-spread 500 --rate-hot 150`, 3라운드 중앙값(최소~최대). 환경은 위와 같고 Prometheus·Grafana가 함께 돕니다.
+
+| 시나리오 | 모드 | 중앙값 | p95 | 처리량 | 5xx | Hikari pending 최대 |
+|---|---|---|---|---|---|---|
+| 동시 1,000건 (총량 120) | v1 | 2.69s (2.63~2.88) | 3.89s (3.78~4.11) | 237/s (230~255) | 0 | 189 |
+| | v2 | 2.15s (2.11~2.26) | 2.76s (2.70~2.83) | 337/s (336~357) | 0 | 188 |
+| 일정 부하 spread 500/s × 60s | v1 | 2.61s (2.48~2.69) | 3.79s (3.51~3.95) | 376/s (361~395) | 0 | 190 |
+| | v2 | 2.79s (2.30~2.89) | 4.49s (3.47~4.62) | 347/s (335~433) | 0 | 190 |
+| 일정 부하 hot 150/s × 60s | v1 | 11ms | 88ms (50~431) | 150/s | 0 | 18 |
+| | v2 | 9ms (8~10) | 462ms (44~649) | 150/s | 0 | 32 |
+
+- 처리량: 동시 1,000건은 1,000 ÷ 가장 늦은 응답, 일정 부하는 201·409 응답 수 ÷ 60초. spread 500/s에서는 두 모드 모두 다 보내지 못했다(보내지 못한 요청 3라운드 합 v1 22,053 · v2 23,135)
+- 모든 측정에서 초과 예약 0
+- **v2가 나은 곳은 동시 1,000건뿐**입니다(p95 −29%, 처리량 +42%). 매진으로 끝나는 요청을 Redis에서 끊어 DB 쓰기를 줄이기 때문입니다. 모든 요청이 성공하는 spread에서는 v2가 오히려 조금 느렸고(범위가 겹침), hot 150/s에서는 둘 다 버텼습니다. 업무 규칙 검사가 Redis 앞에서 요청마다 DB를 읽어 두 방식 모두 Hikari 풀(앱당 10)이 먼저 찹니다
+- N을 정한 방법, 측정별 값, 측정의 한계: [`docs/measurements/2026-11-16-reservation-v1-v2.md`](docs/measurements/2026-11-16-reservation-v1-v2.md), 해석: decisions.md 6장 "예약 v1/v2 비교"
+
 ## 1차 범위
 
 decisions.md 4장이 기준입니다. 요약:
@@ -94,4 +121,4 @@ decisions.md 4장이 기준입니다. 요약:
 
 ## 2차로 미룬 것
 
-프론트엔드 전체(손님·사장님 화면, 실시간 잔여 화면 포함), A-03 수량 복사, A-05 대시보드 실시간·픽업 준비 목록 인쇄, A-11 판매 통계, 탈퇴, 사진 WEBP 변환, k6 부하 테스트 고도화와 v1·v2 비교, Prometheus·Grafana, 아웃박스 실패 이벤트 dead letter, 오래된 데이터 아카이브. 전체 목록과 근거는 decisions.md 4장 "2차로 미룸"에 있습니다.
+프론트엔드 전체(손님·사장님 화면, 실시간 잔여 화면 포함), A-03 수량 복사, A-05 대시보드 실시간·픽업 준비 목록 인쇄, A-11 판매 통계, 탈퇴, 사진 WEBP 변환, 대시보드 경고, 아웃박스 실패 이벤트 dead letter, 오래된 데이터 아카이브. 전체 목록과 근거는 decisions.md 4장 "2차로 미룸"에 있습니다.
