@@ -19,6 +19,9 @@ import org.springframework.stereotype.Component;
  * 3. 업무 규칙 404·422 → 4. Redis Lua 검사·차감 (하루 건수 422, 잔여·1인 한도 409)
  * 5. 예약번호 → 6. DB 트랜잭션 → 7. 커밋 후 처리(afterCommit)
  * 6이 실패하면 4를 보상한다. 3 이후 어디서든 실패하면 Idempotency 키를 지워 같은 키로 다시 시도할 수 있게 한다.
+ *
+ * mode=db-only(v1, 비교 측정용)는 4와 보상을 건너뛰고 6에서 재고·한도 검사를 DB 로 한다(ReservationTxService.createDbOnly).
+ * 1·2·5(요청 제한·Idempotency·예약번호)는 두 모드가 같아 v1 도 Redis 를 쓴다 (decisions.md 6장 "예약 측정 모드").
  */
 @Slf4j
 @Component
@@ -31,6 +34,7 @@ public class ReservationFacade {
     private final ReservationStockStore stockStore;
     private final ReservationNumbers numbers;
     private final ReservationTxService txService;
+    private final ReservationProperties properties;
 
     /** 201 응답. body 는 처음이면 ReservationResponse, 같은 키 재요청이면 저장된 JSON */
     public record Created(String location, Object body) {
@@ -46,8 +50,9 @@ public class ReservationFacade {
 
         try {
             ReservationPlan plan = ruleService.check(memberId, request);
-            String generation = stockStore.reserve(plan);
-            ReservationResponse response = saveOrCompensate(plan, generation, idempotencyKey);
+            ReservationResponse response = properties.mode() == ReservationMode.DB_ONLY
+                    ? saveWithDbCheck(plan, idempotencyKey)
+                    : saveOrCompensate(plan, stockStore.reserve(plan), idempotencyKey);
             String location = "/api/v1/reservations/" + response.reservationId();
             afterCommit(idempotencyKey, fingerprint, location, response);
             return new Created(location, response);
@@ -69,14 +74,19 @@ public class ReservationFacade {
                     .toList());
         } catch (DataIntegrityViolationException e) {
             compensate(plan, generation);
-            // Redis 의 idem 키가 만료·유실된 뒤 같은 키가 다시 온 경우. DB UNIQUE 가 최종 방어
-            if (e.getMessage() != null && e.getMessage().contains("uk_reservation_idem")) {
-                throw new BusinessException(ErrorCode.IDEMPOTENCY_KEY_MISMATCH);
-            }
-            throw e;
+            throw idempotencyConflict(e);
         } catch (RuntimeException e) {
             compensate(plan, generation);
             throw e;
+        }
+    }
+
+    /** db-only(v1). 실패하면 트랜잭션이 롤백될 뿐 되돌릴 Redis 차감이 없다 */
+    private ReservationResponse saveWithDbCheck(ReservationPlan plan, String idempotencyKey) {
+        try {
+            return txService.createDbOnly(plan, numbers.next(plan.saleDate()), idempotencyKey);
+        } catch (DataIntegrityViolationException e) {
+            throw idempotencyConflict(e);
         }
     }
 
@@ -106,6 +116,14 @@ public class ReservationFacade {
         } catch (RuntimeException e) {
             log.error("Idempotency 응답 저장 실패 reservationId={}", response.reservationId(), e);
         }
+    }
+
+    // Redis 의 idem 키가 만료·유실된 뒤 같은 키가 다시 온 경우. DB UNIQUE 가 최종 방어
+    private static RuntimeException idempotencyConflict(DataIntegrityViolationException e) {
+        if (e.getMessage() != null && e.getMessage().contains("uk_reservation_idem")) {
+            return new BusinessException(ErrorCode.IDEMPOTENCY_KEY_MISMATCH);
+        }
+        return e;
     }
 
     // 로그용: breadId×수량만 남긴다 (개인정보 없음)

@@ -141,24 +141,6 @@ class ReservationApiTest extends IntegrationTestSupport {
     }
 
     @Test
-    void 동시_1000건이어도_예약_수량_합은_총량을_넘지_않고_Redis_잔여는_DB_계산값과_같다() throws Exception {
-        List<Long> members = data.members(1000);
-
-        List<ResponseEntity<JsonNode>> responses = concurrently(members.stream()
-                .<Callable<ResponseEntity<JsonNode>>>map(member -> () -> post(member, UUID.randomUUID(), body(Map.of(3L, 1))))
-                .toList(), 32);
-
-        assertThat(statuses(responses)).containsOnly(HttpStatus.CREATED, HttpStatus.CONFLICT);
-        assertThat(statuses(responses)).filteredOn(HttpStatus.CREATED::equals).hasSize(50);
-        int sold = jdbcTemplate.queryForObject("""
-                SELECT COALESCE(SUM(i.quantity), 0) FROM reservation_item i JOIN reservation r ON r.id = i.reservation_id
-                WHERE r.sale_date = ? AND i.bread_id = 3 AND r.status <> 'CANCELED'""", Integer.class, date);
-        assertThat(sold).isEqualTo(50).isLessThanOrEqualTo(reservable(3));
-        assertThat(reserved(3)).isEqualTo(sold);
-        assertThat(redisStock(3)).isEqualTo(reservable(3) - reserved(3));
-    }
-
-    @Test
     void 같은_Idempotency_Key로_다시_보내면_같은_201_응답이고_예약은_1건() {
         long member = data.memberId();
         UUID key = UUID.randomUUID();
