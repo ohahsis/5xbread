@@ -17,6 +17,11 @@ x-app: &app
     ADMIN_INITIAL_PHONE: ${ADMIN_INITIAL_PHONE:-}
     ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-}
     NO_SHOW_CRON: ${NO_SHOW_CRON:-0 0 21 * * *}   # 앱 3개 단일 실행 확인 때만 바꾼다 (decisions.md 6장 "A-07 단일 실행 확인")
+    OUTBOX_RELAY_CRON: ${OUTBOX_RELAY_CRON:-*/5 * * * * *}
+    OUTBOX_CLEANUP_CRON: ${OUTBOX_CLEANUP_CRON:-0 30 4 * * *}
+    RECONCILE_CRON: ${RECONCILE_CRON:-0 */5 * * * *}
+    PASSWORD_HASH_MAX_CONCURRENCY: ${PASSWORD_HASH_MAX_CONCURRENCY:-0}
+    REALTIME_ALLOWED_ORIGINS: ${REALTIME_ALLOWED_ORIGINS:-}
   mem_limit: 768m                 # 앱 1개당. 힙은 이 중 75% (Dockerfile MaxRAMPercentage)
   stop_grace_period: 30s          # graceful shutdown(20초)이 끝나기 전에 SIGKILL 하지 않게
   depends_on:
