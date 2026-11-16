@@ -27,4 +27,16 @@ public abstract class IntegrationTestSupport {
         MYSQL.start();
         REDIS.start();
     }
+
+    /**
+     * Redis 컨테이너를 멈춘다(docker pause). 연결은 남고 응답만 오지 않아 명령이 시간 제한(2초)에 걸린다.
+     * 다른 테스트가 같은 컨테이너를 쓰므로 반드시 finally 에서 resumeRedis 를 부른다.
+     */
+    protected static void pauseRedis() {
+        REDIS.getDockerClient().pauseContainerCmd(REDIS.getContainerId()).exec();
+    }
+
+    protected static void resumeRedis() {
+        REDIS.getDockerClient().unpauseContainerCmd(REDIS.getContainerId()).exec();
+    }
 }
