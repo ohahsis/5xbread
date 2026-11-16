@@ -1,0 +1,97 @@
+// load/steady.js : 일정 부하 예약 (decisions.md 6장 "예약 v1/v2 비교"). 실행은 steady.sh
+//
+// 초당 RATE 건을 DURATION 동안 보낸다(constant-arrival-rate). 응답이 늦어 VU(최대 MAX_VUS)가 모자라면 k6 가 요청을
+// 보내지 못하고 dropped_iterations 로 센다. 이 값과 응답 시간이 "무너지기 시작하는 지점"의 기준이다.
+// SCENARIO
+//   spread: 판매일 5개 × 빵 20종에 나눠 보낸다. 손님 i 는 늘 같은 판매일(i % 5)에만 보내 하루 3건을 넘지 않는다
+//   hot   : 모든 요청이 첫 판매일의 빵 1 한 행에 몰린다(인기 빵). 총량 500(스키마 상한)이라 500건 뒤로는 매진 409
+// 손님은 요청 번호 % USERS 로 돌린다. 요청 수가 USERS × 3 을 넘으면 하루 3건(422)에 걸리므로 steady.sh 가 미리 막는다.
+// 환경 변수: BASE_URL, SCENARIO, RATE, DURATION, USERS, MAX_VUS, TARGETS("날짜:시간대id,..." 5개), OUT_FILE
+import http from 'k6/http';
+import exec from 'k6/execution';
+import { SharedArray } from 'k6/data';
+import { Counter } from 'k6/metrics';
+
+const BASE_URL = __ENV.BASE_URL || 'http://nginx:8081';
+const SCENARIO = __ENV.SCENARIO || 'spread';
+const RATE = Number(__ENV.RATE);
+const DURATION = __ENV.DURATION || '60s';
+const USERS = Number(__ENV.USERS || 10000);
+const MAX_VUS = Number(__ENV.MAX_VUS || 1000);
+const TARGETS = (__ENV.TARGETS || '').split(',').filter(Boolean).map((pair) => {
+  const [date, slot] = pair.split(':');
+  return { date, slot: Number(slot) };
+});
+const BREADS = 20;
+
+const tokens = new SharedArray('tokens', () => JSON.parse(open('/work/tokens.json')));
+
+const counters = {
+  201: new Counter('reserve_201'),
+  409: new Counter('reserve_409'),
+  422: new Counter('reserve_422'),
+  429: new Counter('reserve_429'),
+};
+const other = new Counter('reserve_other');
+const serverError = new Counter('reserve_5xx');
+
+export const options = {
+  scenarios: {
+    steady: {
+      executor: 'constant-arrival-rate', rate: RATE, timeUnit: '1s', duration: DURATION,
+      preAllocatedVUs: Math.min(MAX_VUS, Math.max(50, RATE)), maxVUs: MAX_VUS,
+    },
+  },
+  thresholds: { 'http_req_duration{name:reserve}': ['p(95)>=0'] },
+  summaryTrendStats: ['avg', 'min', 'med', 'p(90)', 'p(95)', 'p(99)', 'max'],
+};
+
+export default function () {
+  const i = exec.scenario.iterationInTest;
+  const member = i % USERS;
+  const token = tokens[member];
+  if (!token) {
+    other.add(1);
+    return;
+  }
+  const target = SCENARIO === 'hot' ? TARGETS[0] : TARGETS[member % TARGETS.length];
+  const breadId = SCENARIO === 'hot' ? 1 : 1 + (Math.floor(i / TARGETS.length) % BREADS);
+  const res = http.post(`${BASE_URL}/api/v1/reservations`,
+      JSON.stringify({ saleDate: target.date, pickupSlotId: target.slot, items: [{ breadId, quantity: 1 }] }),
+      {
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'Idempotency-Key': uuidv4() },
+        tags: { name: 'reserve' },
+      });
+  (counters[res.status] || other).add(1);
+  if (res.status >= 500) {
+    serverError.add(1);
+  }
+}
+
+function uuidv4() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+export function handleSummary(data) {
+  const count = (name) => (data.metrics[name] ? data.metrics[name].values.count : 0);
+  const d = data.metrics['http_req_duration{name:reserve}'];
+  const seconds = parseFloat(DURATION);          // 처리량 기준은 보낸 구간(초). 끝난 뒤 남은 응답을 기다린 시간은 넣지 않는다
+  const sent = ['reserve_201', 'reserve_409', 'reserve_422', 'reserve_429', 'reserve_other'].reduce((s, n) => s + count(n), 0);
+  const result = {
+    scenario: SCENARIO, rate: RATE, duration: DURATION,
+    sent, dropped: count('dropped_iterations'),
+    throughput: Math.round((count('reserve_201') / seconds) * 10) / 10,
+    created201: count('reserve_201'), conflict409: count('reserve_409'), unprocessable422: count('reserve_422'),
+    tooMany429: count('reserve_429'), other: count('reserve_other'), serverError5xx: count('reserve_5xx'),
+    maxVus: data.metrics.vus_max ? data.metrics.vus_max.values.max : null,
+    reserveDurationMs: d ? Object.fromEntries(Object.entries(d.values).map(([k, v]) => [k, Math.round(v * 10) / 10])) : {},
+  };
+  const out = { stdout: `\nRESULT ${JSON.stringify(result)}\n` };
+  if (__ENV.OUT_FILE) {
+    out[__ENV.OUT_FILE] = JSON.stringify(data, null, 2);
+  }
+  return out;
+}

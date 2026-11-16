@@ -22,6 +22,7 @@ x-app: &app
     RECONCILE_CRON: ${RECONCILE_CRON:-0 */5 * * * *}
     PASSWORD_HASH_MAX_CONCURRENCY: ${PASSWORD_HASH_MAX_CONCURRENCY:-0}
     REALTIME_ALLOWED_ORIGINS: ${REALTIME_ALLOWED_ORIGINS:-}
+    RESERVATION_MODE: ${RESERVATION_MODE:-redis}   # db-only(v1)는 비교 측정 때만 (load/compare.sh, decisions.md 6장 "예약 측정 모드")
   mem_limit: 768m                 # 앱 1개당. 힙은 이 중 75% (Dockerfile MaxRAMPercentage)
   stop_grace_period: 30s          # graceful shutdown(20초)이 끝나기 전에 SIGKILL 하지 않게
   depends_on:
@@ -101,6 +102,38 @@ services:
     depends_on:
       - nginx
 
+  # 메트릭 (decisions.md 6장 "예약 v1/v2 비교"). up 에 profile 을 붙일 때만 뜬다:
+  #   docker compose -f compose.full.yaml --profile monitoring up -d
+  # 호스트에는 127.0.0.1 로만 연다. 대시보드는 infra/grafana/dashboards 의 JSON
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: [monitoring]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    profiles: [monitoring]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}   # 127.0.0.1 에서만 열리는 로컬 측정용
+      GF_AUTH_ANONYMOUS_ENABLED: "true"                             # 보기만(Viewer). 스크린샷용
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/reservation.json
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      - prometheus
+
 volumes:
   mysql-data: {}
   redis-data: {}
+  prometheus-data: {}

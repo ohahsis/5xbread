@@ -30,6 +30,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-websocket")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    runtimeOnly("io.micrometer:micrometer-registry-prometheus")   // /actuator/prometheus (docker 프로필에서만 노출, Nginx 밖으로는 막음)
 
     // 인증 (JWT) · API 문서
     implementation("io.jsonwebtoken:jjwt-api:0.13.0")
