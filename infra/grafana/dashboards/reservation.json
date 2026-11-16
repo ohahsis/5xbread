@@ -33,7 +33,7 @@
         "includeAll": false,
         "multi": false,
         "refresh": 2,
-        "regex": "",
+        "regex": "/^\\/api\\//",
         "sort": 1
       },
       {
@@ -44,10 +44,10 @@
           "uid": "prometheus"
         },
         "query": {
-          "query": "label_values(http_server_requests_seconds_count{uri=~\"$uri\"}, method)",
+          "query": "label_values(http_server_requests_seconds_count{uri=~\"${uri:regex}\"}, method)",
           "refId": "v"
         },
-        "definition": "label_values(http_server_requests_seconds_count{uri=~\"$uri\"}, method)",
+        "definition": "label_values(http_server_requests_seconds_count{uri=~\"${uri:regex}\"}, method)",
         "current": {
           "text": "POST",
           "value": "POST"
@@ -110,7 +110,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_server_requests_seconds_bucket{uri=~\"$uri\", method=~\"$method\"}[30s])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_server_requests_seconds_bucket{uri=~\"${uri:regex}\", method=~\"${method:regex}\"}[30s])))",
           "legendFormat": "p50"
         },
         {
@@ -119,7 +119,7 @@
             "uid": "prometheus"
           },
           "refId": "B",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{uri=~\"$uri\", method=~\"$method\"}[30s])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{uri=~\"${uri:regex}\", method=~\"${method:regex}\"}[30s])))",
           "legendFormat": "p95"
         },
         {
@@ -128,7 +128,7 @@
             "uid": "prometheus"
           },
           "refId": "C",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{uri=~\"$uri\", method=~\"$method\"}[30s])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{uri=~\"${uri:regex}\", method=~\"${method:regex}\"}[30s])))",
           "legendFormat": "p99"
         }
       ]
@@ -179,7 +179,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "sum by (status) (rate(http_server_requests_seconds_count{uri=~\"$uri\", method=~\"$method\"}[30s]))",
+          "expr": "sum by (status) (rate(http_server_requests_seconds_count{uri=~\"${uri:regex}\", method=~\"${method:regex}\"}[30s]))",
           "legendFormat": "{{status}}"
         },
         {
@@ -188,7 +188,7 @@
             "uid": "prometheus"
           },
           "refId": "B",
-          "expr": "sum(rate(http_server_requests_seconds_count{uri=~\"$uri\", method=~\"$method\"}[30s]))",
+          "expr": "sum(rate(http_server_requests_seconds_count{uri=~\"${uri:regex}\", method=~\"${method:regex}\"}[30s]))",
           "legendFormat": "합계"
         }
       ]
