@@ -8,7 +8,7 @@
 
 | E | 상황 | 기대 결과 | 증명하는 테스트 | 비고 |
 |---|---|---|---|---|
-| E-01 | 잔여 1개에 두 손님이 동시에 1개씩 요청 | 1명만 201, 다른 1명은 409 `OUT_OF_STOCK` | `reservation.ReservationApiTest#마지막_1개를_동시에_2건_예약하면_1건_성공_1건_409`<br>`reservation.ReservationApiTest#동시_1000건이어도_예약_수량_합은_총량을_넘지_않고_Redis_잔여는_DB_계산값과_같다` | 앱 3개 + Nginx는 `load/run.sh`(1,000건 → 201 120 / 409 880 / 5xx 0) |
+| E-01 | 잔여 1개에 두 손님이 동시에 1개씩 요청 | 1명만 201, 다른 1명은 409 `OUT_OF_STOCK` | `reservation.ReservationApiTest#마지막_1개를_동시에_2건_예약하면_1건_성공_1건_409`<br>`reservation.ConcurrentReservationRedisModeTest#동시_1000건이어도_예약_수량_합은_총량을_넘지_않는다` (redis v2, Redis 잔여 = DB)<br>`reservation.ConcurrentReservationDbOnlyModeTest#동시_1000건이어도_예약_수량_합은_총량을_넘지_않는다` (db-only v1) | 앱 3개 + Nginx는 `load/run.sh`(1,000건 → 201 120 / 409 880 / 5xx 0) |
 | E-02 | 한도 3개인 빵을 같은 손님이 두 탭에서 동시에 2개씩 요청 | 한쪽만 201, 다른 쪽은 409 `PER_USER_LIMIT_EXCEEDED`, 1인 누적 2 | `reservation.EdgeCaseApiTest#E02_한도_3개_빵을_같은_손님이_두_탭에서_동시에_2개씩_요청하면_한쪽만_성공하고_다른_쪽은_PER_USER_LIMIT_EXCEEDED`<br>`reservation.ReservationApiTest#한도를_넘으면_409와_남은_1인_한도` | |
 | E-03 | 예약 버튼 연타·네트워크 재전송 | 같은 `Idempotency-Key`면 예약 1건. 다시 보내면 같은 201, 처리 중이면 409 `IDEMPOTENCY_IN_PROGRESS` | `reservation.EdgeCaseApiTest#E03_같은_Idempotency_Key로_동시에_연타해도_예약은_1건이고_나머지는_같은_201_또는_처리_중_409`<br>`reservation.ReservationApiTest#같은_Idempotency_Key로_다시_보내면_같은_201_응답이고_예약은_1건`<br>`reservation.ReservationApiTest#실패한_요청의_키는_지워져_같은_키로_다시_시도할_수_있고_처리_중이면_409` | 처리 중 409는 정의서 N-06. 실패한 요청의 키는 지워져 다시 시도할 수 있다 |
 | E-04 | 빵 3종 중 1종만 매진 | 예약 전체 409 `OUT_OF_STOCK`, 나머지 2종은 Redis 잔여·1인 누적·DB 모두 그대로 | `reservation.EdgeCaseApiTest#E04_빵_3종_중_1종이_매진이면_전체_실패하고_나머지_2종은_Redis도_DB도_그대로` | Lua가 모든 빵을 검사한 뒤에만 차감한다 |

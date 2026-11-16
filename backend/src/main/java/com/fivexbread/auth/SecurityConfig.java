@@ -41,6 +41,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/error").permitAll()     // 오류 포워드가 401로 덮이지 않게
                         .requestMatchers("/actuator/health/**").permitAll()
+                        // 노출은 docker 프로필만(application-docker.yml). Prometheus 가 compose 네트워크 안에서 앱에 직접 붙고, Nginx 는 /actuator 를 404 로 막는다
+                        .requestMatchers(HttpMethod.GET, "/actuator/prometheus").permitAll()
                         // WebSocket 핸드셰이크(C-03). 인증은 STOMP CONNECT 프레임에서 StompAuthInterceptor 가 한다
                         .requestMatchers(HttpMethod.GET, "/ws").permitAll()
                         .requestMatchers(SWAGGER).permitAll()

@@ -28,3 +28,5 @@ dist/
 .claude/settings.local.json
 
 docs/private
+# 비교 측정 결과 (load/compare.sh). 대표 값은 README·decisions.md 에 옮긴다
+load/results/

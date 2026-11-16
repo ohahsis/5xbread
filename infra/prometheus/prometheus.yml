@@ -1,0 +1,15 @@
+# Prometheus (compose.full.yaml profile "monitoring"). 앱 3개에 compose 네트워크 안에서 직접 붙는다(Nginx 는 /actuator 를 막음)
+global:
+  scrape_interval: 5s             # 60초 일정 부하에서 rate([30s])가 점 6개 이상을 보게
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: fivexbread
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["app1:8080"]
+        labels: { app: app1 }
+      - targets: ["app2:8080"]
+        labels: { app: app2 }
+      - targets: ["app3:8080"]
+        labels: { app: app3 }

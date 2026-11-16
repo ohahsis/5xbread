@@ -10,10 +10,12 @@
 # 3) k6 컨테이너로 Nginx 주소에 동시 예약 1,000건
 # 4) 판정: reserved_qty = 예약 수량 합 ≤ reservable_qty, Redis 잔여 = reservable_qty − reserved_qty,
 #    응답은 201 개수 = reserved_qty(1건당 1개), 5xx 0, 1,000건 모두 201 또는 409
+#    RESERVATION_MODE=db-only(v1, 재고·한도 검사를 DB로)로 띄운 앱이면 Redis 잔여 대신 "Redis 재고 키 없음"을 본다(v1 은 Redis 재고를 쓰지 않음)
+# OUT_DIR·NAME 을 주면 k6 summary JSON 을 OUT_DIR/NAME.json 으로 남긴다 (compare.sh)
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-COMPOSE=(docker compose -f compose.full.yaml)
+COMPOSE=(docker compose -f compose.full.yaml ${COMPOSE_OVERRIDE:+-f "$COMPOSE_OVERRIDE"})
 BREAD_ID=1
 USERS=1000
 CHECK_ONLY=false
@@ -43,7 +45,11 @@ if ! $CHECK_ONLY; then
     echo -n "$app=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$id"),"
   done)
 
-  K6_OUT=$("${COMPOSE[@]}" run --rm --no-deps --quiet-pull \
+  OUT_ARGS=()
+  if [[ -n "${OUT_DIR:-}" ]]; then
+    OUT_ARGS=(-v "$OUT_DIR:/out" -e OUT_FILE="/out/${NAME:-burst}.json")
+  fi
+  K6_OUT=$("${COMPOSE[@]}" run --rm --no-deps --quiet-pull ${OUT_ARGS[@]+"${OUT_ARGS[@]}"} \
     -e SALE_DATE="$SALE_DATE" -e PICKUP_SLOT_ID="$PICKUP_SLOT_ID" -e BREAD_ID="$BREAD_ID" -e APP_IPS="$APP_IPS" \
     -e CANCEL="$($WITH_CANCEL && echo 1 || echo 0)" \
     k6 run --quiet /load/reserve.js 2>&1 | grep -v -E "^ ?Container " || true)
@@ -91,7 +97,11 @@ check() {   # check 설명 실제값 연산자 기대값
 
 check "DB reserved_qty = 예약 수량 합" "$RESERVED" -eq "$ITEM_SUM"
 check "DB reserved_qty ≤ reservable_qty (초과 예약 0)" "$RESERVED" -le "$RESERVABLE"
-check "Redis 잔여 = reservable_qty − reserved_qty" "$REDIS_STOCK" -eq "$(( ${RESERVABLE:-0} - ${RESERVED:-0} ))"
+if [[ "${RESERVATION_MODE:-redis}" == "db-only" ]]; then
+  check "Redis 재고 키 없음 (v1 은 Redis 재고를 쓰지 않음)" "$(redis EXISTS "stock:{$SALE_DATE}:$BREAD_ID")" -eq 0
+else
+  check "Redis 잔여 = reservable_qty − reserved_qty" "$REDIS_STOCK" -eq "$(( ${RESERVABLE:-0} - ${RESERVED:-0} ))"
+fi
 if ! $CHECK_ONLY; then
   CREATED=$(result created201)
   CONFLICT=$(result conflict409)

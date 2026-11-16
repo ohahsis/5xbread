@@ -170,5 +170,9 @@ export function handleSummary(data) {
     reserveDurationMs: trend('http_req_duration{name:reserve}'),
     loginDurationMs: trend('http_req_duration{name:login}'),
   };
-  return { stdout: `\nRESULT ${JSON.stringify(result)}\n` };
+  const out = { stdout: `\nRESULT ${JSON.stringify(result)}\n` };
+  if (__ENV.OUT_FILE) {
+    out[__ENV.OUT_FILE] = JSON.stringify(data, null, 2);   // k6 summary 전체 (compare.sh)
+  }
+  return out;
 }

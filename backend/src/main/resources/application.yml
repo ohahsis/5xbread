@@ -55,6 +55,7 @@ fivexbread:
     max-total-quantity: 20        # Q-07: 예약 1건 최대 총수량
     rate-limit-per-second: 5      # N-23: 회원당 초당 예약 요청
     idempotency-ttl: 24h          # N-06: Idempotency 결과 보관
+    mode: ${RESERVATION_MODE:redis}   # redis(v2, 운영) | db-only(v1, 재고·한도 검사를 DB로. 비교 측정용, docker·test 프로필에서만)
   catalog-cache:
     ttl: 30s                      # 부록 B: 빵 정보 로컬 캐시. 무효화 메시지가 유실돼도 이 시간 뒤에는 맞는다
   no-show:

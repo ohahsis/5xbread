@@ -6,6 +6,18 @@ management:
     health:
       probes:
         enabled: true             # /actuator/health/readiness: compose healthcheck 가 이것으로 준비 완료를 본다
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus   # Prometheus 는 compose 네트워크 안에서 app1~3:8080 에 직접 붙는다. Nginx 는 /actuator 를 밖으로 내보내지 않는다
+  metrics:
+    tags:
+      application: fivexbread
+    distribution:
+      # p50·p95·p99 를 Prometheus 에서 앱 3개를 합쳐 계산하려면 백분위가 아니라 히스토그램 버킷이 필요하다 (infra/grafana 대시보드)
+      percentiles-histogram:
+        http.server.requests: true
+        lettuce.command.completion: true
 
 spring:
   lifecycle:
