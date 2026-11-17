@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -13,10 +14,12 @@ import com.fivexbread.support.Concurrently;
 import com.fivexbread.support.IntegrationTestSupport;
 import com.fivexbread.support.MutableClock;
 import com.fivexbread.support.MutableClockConfig;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,7 +31,10 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
-/** 폴러 묶음 처리·멱등·정리 (decisions.md 6장 "아웃박스 흐름"). 행은 SQL 로 직접 넣는다. 빵 1 재고 키를 10으로 두고 늘리기 이벤트를 쓴다 */
+/**
+ * 폴러 묶음 처리·멱등·정리·실패 한도 (decisions.md 6장 "아웃박스 흐름"·"아웃박스 실패 한도"). 행은 SQL 로 직접 넣는다.
+ * 빵 1 재고 키를 10으로 두고 늘리기 이벤트를 쓴다. 실패 한도는 기본값 10
+ */
 @Import(MutableClockConfig.class)
 class OutboxRelayTest extends IntegrationTestSupport {
 
@@ -46,6 +52,12 @@ class OutboxRelayTest extends IntegrationTestSupport {
 
     @Autowired
     MutableClock mutableClock;
+
+    @Autowired
+    OutboxMetrics outboxMetrics;
+
+    @Autowired
+    MeterRegistry meterRegistry;
 
     @MockitoSpyBean
     StockRedisSync stockRedisSync;
@@ -114,6 +126,92 @@ class OutboxRelayTest extends IntegrationTestSupport {
 
         verify(stockRedisSync, times(1)).increaseOnce(anyLong(), any(), any(), any());
         assertThat(pending()).isEqualTo(2);
+        assertThat(attemptsInIdOrder()).containsExactly(1, 0);      // 시도는 실패한 맨 앞 행에만 센다
+    }
+
+    @Test
+    void 실패마다_attempts_를_올리고_10번째_실패에서_dead_로_표시해_더_집지_않는다() {
+        long id = insert("UNKNOWN", "{}", NOW.minusMinutes(1), null);
+        double deadBefore = deadEvents();
+
+        for (int i = 0; i < 9; i++) {
+            outboxRelay.publishPending();
+        }
+        assertThat(row(id)).containsEntry("attempts", 9).containsEntry("dead_at", null);
+        assertThat((String) row(id).get("last_error")).startsWith("IllegalStateException: 처리할 수 없는 아웃박스 이벤트");
+
+        mutableClock.set(NOW.plusMinutes(1));
+        outboxRelay.publishPending();
+
+        assertThat(row(id)).containsEntry("attempts", 10).containsEntry("dead_at", NOW.plusMinutes(1));
+        assertThat(deadEvents()).isEqualTo(deadBefore + 1);
+
+        outboxRelay.publishPending();
+        outboxRelay.publish(id);
+        assertThat(row(id)).containsEntry("attempts", 10);          // 폴러도 바로 처리도 집지 않는다
+        assertThat(deadEvents()).isEqualTo(deadBefore + 1);
+    }
+
+    @Test
+    void 바로_처리_실패도_1회로_센다() {
+        long id = insert("STOCK_INCREASE", increase(1), NOW, null);
+        doThrow(new RedisConnectionFailureException("Redis 장애")).when(stockRedisSync)
+                .increaseOnce(anyLong(), any(), any(), any());
+
+        outboxRelay.publish(id);
+
+        assertThat(row(id)).containsEntry("attempts", 1).containsEntry("published_at", null);
+        assertThat((String) row(id).get("last_error")).isEqualTo("RedisConnectionFailureException: Redis 장애");
+    }
+
+    @Test
+    void last_error_는_500자에서_자른다() {
+        long id = insert("STOCK_INCREASE", increase(1), NOW.minusMinutes(1), null);
+        doThrow(new IllegalStateException("가".repeat(1_000))).when(stockRedisSync)
+                .increaseOnce(anyLong(), any(), any(), any());
+
+        outboxRelay.publishPending();
+
+        assertThat((String) row(id).get("last_error")).hasSize(500).startsWith("IllegalStateException: 가가");
+    }
+
+    @Test
+    void 실패한_뒤_성공하면_발행되고_attempts_는_남는다() {
+        long id = insert("STOCK_INCREASE", increase(3), NOW.minusMinutes(1), null);
+        doThrow(new RedisConnectionFailureException("Redis 장애")).doCallRealMethod().when(stockRedisSync)
+                .increaseOnce(anyLong(), any(), any(), any());
+
+        outboxRelay.publishPending();
+        outboxRelay.publishPending();
+
+        assertThat(row(id).get("published_at")).isNotNull();
+        assertThat(row(id)).containsEntry("attempts", 1).containsEntry("dead_at", null);
+        assertThat(redis.opsForValue().get(StockKeys.stock(SALE_DATE, 1))).isEqualTo("13");
+    }
+
+    @Test
+    void 이미_dead_인_행은_바로_처리도_집지_않는다() {
+        long id = insert("STOCK_INCREASE", increase(1), NOW, null);
+        jdbcTemplate.update("UPDATE outbox_event SET attempts = 10, dead_at = ? WHERE id = ?", NOW, id);
+
+        outboxRelay.publish(id);
+
+        verify(stockRedisSync, never()).increaseOnce(anyLong(), any(), any(), any());
+        assertThat(redis.opsForValue().get(StockKeys.stock(SALE_DATE, 1))).isEqualTo("10");
+    }
+
+    @Test
+    void 미발행_gauge_는_dead_를_빼고_dead_gauge_는_dead_만_센다() {
+        insert("STOCK_INCREASE", increase(1), NOW, null);
+        insert("STOCK_INCREASE", increase(1), NOW, null);
+        long dead = insert("STOCK_INCREASE", increase(1), NOW, null);
+        insert("STOCK_INCREASE", increase(1), NOW, NOW);              // 발행함
+        jdbcTemplate.update("UPDATE outbox_event SET attempts = 10, dead_at = ? WHERE id = ?", NOW, dead);
+
+        outboxMetrics.refresh();
+
+        assertThat(meterRegistry.get("fivexbread.outbox.pending").gauge().value()).isEqualTo(2);
+        assertThat(meterRegistry.get("fivexbread.outbox.dead").gauge().value()).isEqualTo(1);
     }
 
     @Test
@@ -128,9 +226,23 @@ class OutboxRelayTest extends IntegrationTestSupport {
         assertThat(pending()).isEqualTo(1);
     }
 
-    private void insert(String type, String payload, LocalDateTime createdAt, LocalDateTime publishedAt) {
+    private long insert(String type, String payload, LocalDateTime createdAt, LocalDateTime publishedAt) {
         jdbcTemplate.update("INSERT INTO outbox_event (event_type, payload, created_at, published_at) VALUES (?, ?, ?, ?)",
                 type, payload, createdAt, publishedAt);
+        return jdbcTemplate.queryForObject("SELECT MAX(id) FROM outbox_event", Long.class);
+    }
+
+    private Map<String, Object> row(long id) {
+        return jdbcTemplate.queryForMap(
+                "SELECT attempts, last_error, dead_at, published_at FROM outbox_event WHERE id = ?", id);
+    }
+
+    private List<Integer> attemptsInIdOrder() {
+        return jdbcTemplate.queryForList("SELECT attempts FROM outbox_event ORDER BY id", Integer.class);
+    }
+
+    private double deadEvents() {
+        return meterRegistry.get("fivexbread.outbox.dead.events").counter().count();
     }
 
     private static String increase(int amount) {

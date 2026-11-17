@@ -69,6 +69,8 @@ fivexbread:
     max-batches: 10               # 폴러 1회 최대 1,000건. 나머지는 다음 주기(5초 뒤)
     cleanup-cron: ${OUTBOX_CLEANUP_CRON:0 30 4 * * *}   # 매일 04:30 발행한 행 정리
     retention: 7d                 # 발행한 행 보관 기간 (decisions.md 6장 "아웃박스 정리")
+    max-attempts: ${OUTBOX_MAX_ATTEMPTS:10}   # 이 횟수째 실패하면 dead. 폴러·바로 처리가 더 집지 않고 N-05 가 재고를 맞춘다
+    metrics-interval: 15s         # 미발행·dead 행 수(gauge)를 DB 에서 다시 읽는 간격. 스크랩 때 DB 를 읽지 않으려고 따로 둔다
   reconcile:
     cron: ${RECONCILE_CRON:0 */5 * * * *}   # 13-10: 5분마다 정합성 점검(N-05). zone 은 StockReconcileJob 의 Asia/Seoul. "-" 면 끈다
     min-gap: 4m                   # 같은 차이를 2회로 세는 최소 간격. 주기(5분)보다 조금 짧게
