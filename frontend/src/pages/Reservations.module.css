@@ -1,0 +1,104 @@
+.filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+.card:hover {
+  border-color: var(--brand);
+}
+
+.cardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.cardHead h1 {
+  margin: 0;
+}
+
+.price {
+  float: right;
+  font-weight: 600;
+}
+
+.info {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 6px 12px;
+  margin: 16px 0;
+}
+
+.info dt {
+  color: var(--text-muted);
+}
+
+.info dd {
+  margin: 0;
+}
+
+.items {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+}
+
+.items td {
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.items td:nth-child(n + 2) {
+  text-align: right;
+}
+
+.items tfoot td {
+  font-weight: 600;
+  border-bottom: none;
+}
+
+.qr {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.status_RESERVED {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status_PICKED_UP {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status_NO_SHOW {
+  background: var(--error-bg);
+  color: var(--error);
+}

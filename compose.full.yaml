@@ -80,8 +80,9 @@ services:
     <<: *app
     pull_policy: never
 
-  nginx:
-    image: nginx:1.27
+  nginx:                          # 로드밸런서 + 손님 화면 정적 파일. 이미지는 frontend/Dockerfile (nginx:1.27 에 빌드 결과를 넣음)
+    build: ./frontend
+    image: fivexbread-web:local
     ports:
       - "80:80"                   # 8081(X-Upstream 포함)은 공개하지 않는다
     volumes:
