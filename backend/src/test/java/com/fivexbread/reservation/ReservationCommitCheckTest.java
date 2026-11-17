@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -192,6 +193,19 @@ class ReservationCommitCheckTest extends IntegrationTestSupport {
         ResponseEntity<JsonNode> failed = post(UUID.randomUUID(), Map.of(3L, 2));
 
         assertThat(failed.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(redisStock(3)).isEqualTo(50);
+    }
+
+    @Test
+    void 락_실패면_커밋_여부를_조회하지_않고_보상하고_409_LOCK_CONFLICT() {
+        doThrow(new CannotAcquireLockException("Lock wait timeout exceeded")).when(txService)
+                .create(any(), anyString(), anyString());
+        doThrow(new AssertionError("조회하면 안 됨")).when(queryService).findCreated(anyLong(), anyString());
+
+        ResponseEntity<JsonNode> failed = post(UUID.randomUUID(), Map.of(3L, 2));
+
+        assertThat(failed.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(failed.getBody().get("code").asText()).isEqualTo("LOCK_CONFLICT");
         assertThat(redisStock(3)).isEqualTo(50);
     }
 

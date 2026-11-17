@@ -10,6 +10,7 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -78,8 +79,9 @@ public class ReservationFacade {
         } catch (DataIntegrityViolationException e) {
             compensate(plan, generation);
             throw idempotencyConflict(e);
-        } catch (BusinessException e) {
-            // 트랜잭션 안의 업무 판단(탈퇴 401, DB 한도 재검사 422·409). 롤백이 확실해 커밋 여부를 볼 필요가 없다
+        } catch (BusinessException | PessimisticLockingFailureException e) {
+            // 트랜잭션 안의 업무 판단(탈퇴 401, DB 한도 재검사 422·409)과 락 실패(데드락·락 대기 초과 → 409 LOCK_CONFLICT).
+            // 롤백이 확실해 커밋 여부를 볼 필요가 없다. 락이 몰린 순간에 조회 쿼리를 더 얹지 않는다
             compensate(plan, generation);
             throw e;
         } catch (RuntimeException e) {
