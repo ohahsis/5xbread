@@ -23,6 +23,9 @@ spring:
       connect-timeout: 1s
       timeout: 2s                 # 기본 60초면 Redis 장애 때 요청마다 60초 멈춘다. 목록의 DB 폴백·예약 503 이 이 시간 뒤에 나온다
 
+springdoc:
+  default-produces-media-type: application/json   # 응답 content type 을 */* 가 아니라 실제와 같게 (프론트 타입 생성)
+
 server:
   shutdown: graceful
   tomcat:

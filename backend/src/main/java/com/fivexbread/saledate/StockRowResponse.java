@@ -1,5 +1,7 @@
 package com.fivexbread.saledate;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * 수량 표의 한 행 (M-06). 판매 중인 빵 전부 + 판매 중지됐지만 이 날 수량이 있는 빵.
  *
@@ -13,6 +15,6 @@ public record StockRowResponse(
         int producedQty,
         int reservableQty,
         int reservedQty,
-        Integer perUserLimit
+        @Schema(nullable = true) Integer perUserLimit
 ) {
 }

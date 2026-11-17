@@ -1,5 +1,6 @@
 package com.fivexbread.reservation;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import static com.fivexbread.common.ClockConfig.KST;
 
 import java.time.LocalDate;
@@ -15,8 +16,8 @@ public record ReservationResponse(
         LocalDate saleDate,
         OffsetDateTime pickupAt,
         OffsetDateTime cancelDeadline,
-        OffsetDateTime canceledAt,
-        OffsetDateTime pickedUpAt,
+        @Schema(nullable = true) OffsetDateTime canceledAt,
+        @Schema(nullable = true) OffsetDateTime pickedUpAt,
         List<ItemResponse> items,
         int totalPrice
 ) {

@@ -1,5 +1,6 @@
 package com.fivexbread.auth;
 
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -39,6 +40,7 @@ public class PasswordController {
      * 쿠키 Path 가 /api/v1/auth 라 이 요청에는 쿠키가 오지 않지만, 만료 Set-Cookie 는 경로와 상관없이 브라우저의 쿠키를 지운다.
      */
     @DeleteMapping("/api/v1/members/me")
+    @ApiResponse(responseCode = "204", description = "탈퇴함. 쿠키 만료")
     public ResponseEntity<Void> withdraw(@AuthenticationPrincipal AuthMember member,
                                          @Valid @RequestBody WithdrawalRequest request) {
         authFacade.withdraw(member.memberId(), request.password());

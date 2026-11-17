@@ -23,9 +23,9 @@ public record AdminReservationDetailResponse(
         OffsetDateTime cancelDeadline,
         @Schema(description = "손님 기준 취소 가능 여부(픽업 60분 전까지). 사장님 직권 취소에는 마감이 없다")
         boolean cancelable,
-        OffsetDateTime canceledAt,
-        String cancelReason,
-        OffsetDateTime pickedUpAt,
+        @Schema(nullable = true) OffsetDateTime canceledAt,
+        @Schema(nullable = true) String cancelReason,
+        @Schema(nullable = true) OffsetDateTime pickedUpAt,
         OffsetDateTime createdAt,
         List<ItemResponse> items,
         int totalPrice,
@@ -34,11 +34,12 @@ public record AdminReservationDetailResponse(
 ) {
 
     /** 이름·번호는 마스킹한 값 (AU-10). 탈퇴한 회원이면 둘 다 null */
-    public record MemberSummary(long memberId, MaskedName name, MaskedPhone phone, MemberStatus status) {
+    public record MemberSummary(long memberId, @Schema(nullable = true) MaskedName name, @Schema(nullable = true) MaskedPhone phone,
+                                MemberStatus status) {
     }
 
     /** reservation_history 한 줄. 시간순 */
-    public record HistoryResponse(ReservationStatus fromStatus, ReservationStatus toStatus, ActorType actorType,
+    public record HistoryResponse(@Schema(nullable = true) ReservationStatus fromStatus, ReservationStatus toStatus, ActorType actorType,
                                   OffsetDateTime changedAt) {
     }
 

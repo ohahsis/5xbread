@@ -1,5 +1,8 @@
 package com.fivexbread.member;
 
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Content;
 import com.fivexbread.auth.AuthMember;
 import com.fivexbread.reservation.ReservationController;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,6 +38,7 @@ public class MemberController {
      * Nginx가 붙인 X-Forwarded-For를 Tomcat이 반영한 값 (13-5).
      */
     @PostMapping
+    @ApiResponse(responseCode = "201", description = "가입함. Location: /api/v1/members/{id}")
     public ResponseEntity<SignupResponse> signUp(@Valid @RequestBody SignupRequest request,
                                                  HttpServletRequest httpRequest) {
         SignupResponse response = memberFacade.signUp(request, httpRequest.getRemoteAddr());
@@ -49,7 +53,9 @@ public class MemberController {
 
     /** 이름 수정 (C-10). {"name": "..."} 만 받는다. 규칙은 가입과 같다(앞뒤 공백 제거 후 한글·영문 2~20자) */
     @PatchMapping(value = "/me", consumes = ReservationController.MERGE_PATCH_JSON)
-    public MyInfoResponse patch(@AuthenticationPrincipal AuthMember member, @RequestBody Map<String, Object> body) {
+    public MyInfoResponse patch(@AuthenticationPrincipal AuthMember member,
+                                @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(mediaType = ReservationController.MERGE_PATCH_JSON, schema = @Schema(implementation = MyInfoPatchBody.class)))
+                                @RequestBody Map<String, Object> body) {
         return memberService.rename(member.memberId(), MyInfoPatch.name(body, validator));
     }
 }

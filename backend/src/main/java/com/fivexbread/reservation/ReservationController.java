@@ -1,5 +1,8 @@
 package com.fivexbread.reservation;
 
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Content;
 import com.fivexbread.auth.AuthMember;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
@@ -38,6 +41,8 @@ public class ReservationController {
 
     /** 형식 검증(@Valid 400) → Idempotency-Key 없음 428·형식 400 → Facade. 같은 키 재요청도 처음과 같은 201 */
     @PostMapping
+    @ApiResponse(responseCode = "201", description = "예약함. 같은 Idempotency-Key 재요청도 처음과 같은 201",
+            content = @Content(schema = @Schema(implementation = ReservationResponse.class)))
     public ResponseEntity<Object> create(@AuthenticationPrincipal AuthMember member,
                                          @RequestHeader(name = IDEMPOTENCY_KEY, required = false) String idempotencyKey,
                                          @Valid @RequestBody ReservationCreateRequest request) {
@@ -48,6 +53,7 @@ public class ReservationController {
     /** 손님 취소 (C-06, 13-2). 본문은 {"status":"CANCELED"}만. 남의 예약은 404 */
     @PatchMapping(value = "/{reservationId}", consumes = MERGE_PATCH_JSON)
     public ReservationResponse patch(@AuthenticationPrincipal AuthMember member, @PathVariable long reservationId,
+                                     @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(mediaType = MERGE_PATCH_JSON, schema = @Schema(implementation = ReservationPatchBodies.CustomerCancel.class)))
                                      @RequestBody Map<String, Object> body) {
         ReservationPatch.customer(body);                    // 형식 검증만. 손님은 CANCELED 하나뿐
         return reservationCancelFacade.cancel(reservationId, ReservationActor.customer(member.memberId()), null);

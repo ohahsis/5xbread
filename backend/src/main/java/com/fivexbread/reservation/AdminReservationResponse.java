@@ -1,5 +1,6 @@
 package com.fivexbread.reservation;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import com.fivexbread.common.MaskedName;
 import com.fivexbread.common.MaskedPhone;
 import com.fivexbread.reservation.ReservationResponse.ItemResponse;
@@ -18,8 +19,8 @@ public record AdminReservationResponse(
         LocalDate saleDate,
         long pickupSlotId,
         OffsetDateTime pickupAt,
-        MaskedName memberName,
-        MaskedPhone phone,
+        @Schema(nullable = true) MaskedName memberName,
+        @Schema(nullable = true) MaskedPhone phone,
         List<ItemResponse> items,
         int totalPrice
 ) {

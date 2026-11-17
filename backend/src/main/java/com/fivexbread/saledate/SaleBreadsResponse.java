@@ -1,5 +1,6 @@
 package com.fivexbread.saledate;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -26,8 +27,8 @@ public record SaleBreadsResponse(
             String name,
             int price,
             int remaining,
-            Integer perUserLimit,
-            Integer myReservedQty,
+            @Schema(nullable = true) Integer perUserLimit,
+            @Schema(nullable = true) Integer myReservedQty,
             SaleBreadStatus status
     ) {
     }

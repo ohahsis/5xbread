@@ -1,5 +1,7 @@
 package com.fivexbread.reservation;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Content;
 import com.fivexbread.auth.AuthMember;
 import com.fivexbread.common.ApiExceptionHandler.FieldViolation;
 import com.fivexbread.common.BusinessException;
@@ -66,6 +68,7 @@ public class AdminReservationController {
 
     @PatchMapping(value = "/{reservationId}", consumes = ReservationController.MERGE_PATCH_JSON)
     public ReservationResponse patch(@AuthenticationPrincipal AuthMember admin, @PathVariable long reservationId,
+                                     @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(mediaType = ReservationController.MERGE_PATCH_JSON, schema = @Schema(implementation = ReservationPatchBodies.AdminStatusChange.class)))
                                      @RequestBody Map<String, Object> body) {
         ReservationPatch patch = ReservationPatch.admin(body);
         return switch (patch.status()) {

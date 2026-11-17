@@ -1,5 +1,6 @@
 package com.fivexbread.member;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import com.fivexbread.common.MaskedPhone;
 import java.time.LocalDate;
 
@@ -9,7 +10,7 @@ import java.time.LocalDate;
  * @param reservationBlockedUntil 노쇼 예약 제한 마지막 날(R-17, 그날 포함). 제한이 없으면 null
  */
 public record MyInfoResponse(long memberId, String name, MaskedPhone phone, Role role,
-                             LocalDate reservationBlockedUntil) {
+                             @Schema(nullable = true) LocalDate reservationBlockedUntil) {
 
     static MyInfoResponse from(Member member) {
         return new MyInfoResponse(member.getId(), member.getName(), member.maskedPhone(), member.getRole(),

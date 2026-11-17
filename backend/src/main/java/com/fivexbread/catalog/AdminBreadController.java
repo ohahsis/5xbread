@@ -1,5 +1,6 @@
 package com.fivexbread.catalog;
 
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
@@ -28,6 +29,7 @@ public class AdminBreadController {
     }
 
     @PostMapping
+    @ApiResponse(responseCode = "201", description = "등록함. Location: /api/v1/admin/breads/{id}")
     public ResponseEntity<BreadResponse> register(@Valid @RequestBody BreadCreateRequest request) {
         BreadResponse response = BreadResponse.from(breadService.register(request));
         return ResponseEntity.created(URI.create("/api/v1/admin/breads/" + response.id())).body(response);
