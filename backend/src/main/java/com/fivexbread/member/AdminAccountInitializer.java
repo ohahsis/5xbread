@@ -31,7 +31,9 @@ import org.springframework.stereotype.Component;
 public class AdminAccountInitializer implements ApplicationRunner {
 
     private static final String LOCK_NAME = "fivexbread:initial-admin";
-    private static final int LOCK_TIMEOUT_SECONDS = 10;
+    // JDBC socketTimeout(10초)보다 짧게. 같으면 GET_LOCK 을 기다리는 쿼리가 소켓 시간 제한에 먼저 걸려 연결이 끊긴다.
+    // 잠금을 쥔 앱은 확인·저장 트랜잭션 하나만 하므로(BCrypt 는 잠금 밖) 5초면 충분하다
+    static final int LOCK_TIMEOUT_SECONDS = 5;
 
     private final AdminAccountProperties properties;
     private final MemberService memberService;

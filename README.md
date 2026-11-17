@@ -75,6 +75,7 @@ Java 21, Spring Boot 3.5.16, Gradle 8.14(Kotlin DSL), MySQL 8, Redis 7, Flyway, 
 cd backend && ./gradlew bootRun --args='--spring.profiles.active=local'
 ```
 
+- 프로필을 꼭 지정합니다(IDE 실행 설정도 `local`). 기본 프로필이 없어 아무것도 켜지 않으면 `.env`를 읽지 않아 비밀 키가 비고 앱이 뜨지 않습니다.
 - `local` 프로필이 루트의 `compose.yaml`로 MySQL·Redis 컨테이너를 띄웁니다(직접 띄우려면 루트에서 `docker compose up -d`).
 - Flyway가 테이블과 초기 데이터(빵 25종, 내일부터 판매일 7일치)를 넣고, 사장님 계정이 없으면 `.env` 값으로 만듭니다(첫 로그인 때 비밀번호 변경).
 - API `http://localhost:8080/api/v1/...`, API 문서 `http://localhost:8080/swagger-ui.html`, 실시간 잔여 STOMP `ws://localhost:8080/ws`

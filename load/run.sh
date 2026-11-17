@@ -9,7 +9,7 @@
 # 2) 그 판매일의 Redis 키를 지운다 (첫 예약 때 DB 기준으로 다시 적재된다)
 # 3) k6 컨테이너로 Nginx 주소에 동시 예약 1,000건
 # 4) 판정: reserved_qty = 예약 수량 합 ≤ reservable_qty, Redis 잔여 = reservable_qty − reserved_qty,
-#    응답은 201 개수 = reserved_qty(1건당 1개), 5xx 0, 1,000건 모두 201 또는 409
+#    응답은 201 개수 = reserved_qty(1건당 1개), 5xx 0, 1,000건 모두 201 또는 409, 409 중 LOCK_CONFLICT(DB 락 실패) 0
 #    RESERVATION_MODE=db-only(v1, 재고·한도 검사를 DB로)로 띄운 앱이면 Redis 잔여 대신 "Redis 재고 키 없음"을 본다(v1 은 Redis 재고를 쓰지 않음)
 # OUT_DIR·NAME 을 주면 k6 summary JSON 을 OUT_DIR/NAME.json 으로 남긴다 (compare.sh)
 set -euo pipefail
@@ -106,6 +106,7 @@ if ! $CHECK_ONLY; then
   CREATED=$(result created201)
   CONFLICT=$(result conflict409)
   check "5xx 0건" "$(result serverError5xx)" -eq 0
+  check "LOCK_CONFLICT 0건 (DB 락 대기 5초 초과·데드락)" "$(result lockConflict)" -eq 0
   check "응답 ${USERS}건 모두 201 또는 409" "$(( ${CREATED:-0} + ${CONFLICT:-0} ))" -eq "$USERS"
   if $WITH_CANCEL; then
     CANCELED=$(result ok200)

@@ -10,6 +10,9 @@ import com.fivexbread.member.Role;
 import com.fivexbread.support.IntegrationTestSupport;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -20,6 +23,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -55,6 +59,9 @@ class StockAdminApiTest extends IntegrationTestSupport {
 
     @Autowired
     StringRedisTemplate redis;
+
+    @Autowired
+    DataSource dataSource;
 
     @MockitoSpyBean
     DailyStockRepository dailyStockRepository;                  // 검사와 UPDATE 사이에 예약이 끼어드는 상황을 만든다
@@ -272,6 +279,77 @@ class StockAdminApiTest extends IntegrationTestSupport {
         assertThat(statuses).filteredOn(HttpStatus.PRECONDITION_FAILED::equals).hasSize(requests - 1);
         assertThat(data.version(date)).isEqualTo(1);
         assertThat(reservable(1)).isBetween(61, 65);
+    }
+
+    @Test
+    void 요청_순서와_달리_breadId_순서로_잠가_예약과_데드락이_나지_않는다() throws Exception {
+        // 예약은 breadId 오름차순(1 → 2)으로 행을 잠근다(ReservationRuleService). 그 순서를 JDBC 트랜잭션으로 흉내 낸다.
+        // 1을 잠근 채 [2, 1] 저장을 보내고, 저장이 기다리기 시작하면 2를 잠근다.
+        // 요청 순서대로 잠그면 저장이 2를 쥔 채 1을 기다려 서로 기다리고 InnoDB 가 한쪽을 데드락으로 끊는다
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try (Connection reservation = dataSource.getConnection()) {
+            reservation.setAutoCommit(false);
+            lockStockRow(reservation, 1);
+            Future<ResponseEntity<JsonNode>> saving = executor.submit(() ->
+                    put("\"v0\"", List.of(row(2, 80, 55, null), row(1, 100, 65, 4)), Role.ADMIN));
+            awaitLockWait();
+            lockStockRow(reservation, 2);           // 데드락이면 여기서 SQLException(1213) 이거나 저장이 409
+            reservation.commit();
+
+            ResponseEntity<JsonNode> response = saving.get(30, TimeUnit.SECONDS);
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        } finally {
+            executor.shutdownNow();
+        }
+        assertThat(reservable(1)).isEqualTo(65);
+        assertThat(reservable(2)).isEqualTo(55);
+    }
+
+    @Test
+    void 행_락을_5초_넘게_얻지_못하면_409_LOCK_CONFLICT이고_버전과_Redis는_그대로다() throws Exception {
+        redis.opsForValue().set("stock:{" + date + "}:1", "30");     // 60 − 30. 줄이기는 Redis 를 먼저 줄인다
+        try (Connection reservation = dataSource.getConnection()) {
+            reservation.setAutoCommit(false);
+            lockStockRow(reservation, 1);           // 예약이 오래 쥐고 있는 상황 (innodb_lock_wait_timeout 5초)
+
+            long started = System.nanoTime();
+            ResponseEntity<JsonNode> response = put("\"v0\"", List.of(row(1, 100, 50, 4)), Role.ADMIN);
+            long waitedMillis = (System.nanoTime() - started) / 1_000_000;
+            reservation.rollback();
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(response.getBody().get("code").asText()).isEqualTo("LOCK_CONFLICT");
+            assertThat(waitedMillis).isBetween(4_500L, 9_000L);   // 소켓 시간 제한(10초)보다 락 대기가 먼저 끝난다
+        }
+        assertThat(data.version(date)).isZero();
+        assertThat(reservable(1)).isEqualTo(60);
+        assertThat(redis.opsForValue().get("stock:{" + date + "}:1")).isEqualTo("30");   // 먼저 줄인 10을 되돌림
+    }
+
+    private void lockStockRow(Connection connection, long breadId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "UPDATE daily_stock SET reserved_qty = reserved_qty WHERE sale_date = ? AND bread_id = ?")) {
+            statement.setObject(1, date);
+            statement.setLong(2, breadId);
+            statement.executeUpdate();
+        }
+    }
+
+    // 저장 요청이 행 락을 기다리기 시작할 때까지 (최대 5초)
+    private void awaitLockWait() throws InterruptedException {
+        for (int i = 0; i < 100; i++) {
+            // 테스트 계정은 performance_schema 권한이 없어, 같은 계정의 스레드가 보이는 PROCESSLIST 로 본다.
+            // 락이 없으면 저장의 행 UPDATE(updateIfNotBelowReserved)는 바로 끝나므로 실행 중으로 보이면 기다리는 것이다
+            Integer waits = jdbcTemplate.queryForObject("""
+                    SELECT COUNT(*) FROM information_schema.PROCESSLIST
+                    WHERE INFO LIKE 'UPDATE daily_stock%SET produced_qty%' AND STATE = 'updating'
+                    """, Integer.class);
+            if (waits != null && waits > 0) {
+                return;
+            }
+            Thread.sleep(50);
+        }
+        throw new AssertionError("저장 요청이 행 락을 기다리지 않았다");
     }
 
     @Test

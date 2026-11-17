@@ -30,6 +30,7 @@ public enum ErrorCode {
     DUPLICATE_BREAD_NAME(HttpStatus.CONFLICT, "이미 같은 이름의 빵이 있습니다"),          // 판매 중인 빵끼리 (A-01)
     ACTIVE_RESERVATION_EXISTS(HttpStatus.CONFLICT, "진행 중인 예약이 있어 탈퇴할 수 없습니다"),        // AU-07: RESERVED 가 있으면
     RECONCILIATION_IN_PROGRESS(HttpStatus.CONFLICT, "같은 판매일의 수량 재계산이 진행 중입니다. 잠시 후 다시 시도해 주세요"),  // A-12·N-05
+    LOCK_CONFLICT(HttpStatus.CONFLICT, "다른 요청과 겹쳤습니다. 다시 시도해 주세요"),   // DB 데드락·락 대기 초과 (decisions.md 6장 "DB 락 실패 응답")
 
     PRECONDITION_FAILED(HttpStatus.PRECONDITION_FAILED, "다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도해 주세요"),
     PAYLOAD_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "파일 크기가 허용 범위를 넘었습니다"),

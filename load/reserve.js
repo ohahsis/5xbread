@@ -32,6 +32,8 @@ const statusCounters = {
 };
 const otherStatus = new Counter('reserve_other');      // 201·409 가 아닌 응답 (500 포함)
 const serverError = new Counter('reserve_5xx');
+// 409 중 DB 락 실패(데드락·락 대기 5초 초과). 재고 소진 409 와 섞이지 않게 code 로 따로 센다 (예약·다시 예약 모두)
+const lockConflict = new Counter('lock_conflict');
 const loginFailed = new Counter('login_failed');
 const appCounters = {
   app1: new Counter('upstream_app1'),
@@ -80,6 +82,7 @@ export default function () {
   check(res, { '201 or 409': (r) => r.status === 201 || r.status === 409 });
 
   (statusCounters[res.status] || otherStatus).add(1);
+  countLockConflict(res);
   if (res.status >= 500) {
     serverError.add(1);
   }
@@ -103,6 +106,7 @@ export default function () {
     sleep(1 + Math.random());
     const retry = reserve(token, 'retry');
     (retryCounters[retry.status] || retryOther).add(1);
+    countLockConflict(retry);
     countServerError(retry, 'retry');
   }
 }
@@ -120,6 +124,12 @@ function countServerError(res, name) {
   if (res.status >= 500) {
     serverError.add(1);
     console.warn(`${name} 5xx status=${res.status} code=${safeCode(res)}`);
+  }
+}
+
+function countLockConflict(res) {
+  if (res.status === 409 && safeCode(res) === 'LOCK_CONFLICT') {
+    lockConflict.add(1);
   }
 }
 
@@ -153,6 +163,7 @@ export function handleSummary(data) {
       conflict409: count('reserve_409'),
       other: count('reserve_other'),
       serverError5xx: count('reserve_5xx'),
+      lockConflict: count('lock_conflict'),
     },
     upstream: {
       app1: count('upstream_app1'),

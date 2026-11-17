@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -49,6 +50,9 @@ class AdminAccountInitializerTest extends IntegrationTestSupport {
 
     @Autowired
     TestRestTemplate restTemplate;
+
+    @Autowired
+    Environment environment;
 
     @BeforeEach
     void setUp() {
@@ -172,6 +176,15 @@ class AdminAccountInitializerTest extends IntegrationTestSupport {
         assertThat(output).contains("010-****-0000");
         assertThat(output).doesNotContain(PHONE, "01199990000", PASSWORD);
         assertThat(new AdminAccountProperties(PHONE, PASSWORD).toString()).doesNotContain(PHONE, PASSWORD);
+    }
+
+    @Test
+    void GET_LOCK_대기는_JDBC_socketTimeout보다_짧다() {
+        // 같거나 길면 잠금을 기다리는 SELECT GET_LOCK 이 소켓 시간 제한에 먼저 걸려 연결이 끊긴다
+        String url = environment.getRequiredProperty("spring.datasource.url");
+        int socketTimeoutMillis = Integer.parseInt(url.replaceAll(".*[?&]socketTimeout=(\\d+).*", "$1"));
+
+        assertThat(AdminAccountInitializer.LOCK_TIMEOUT_SECONDS * 1000).isLessThan(socketTimeoutMillis);
     }
 
     private AdminAccountInitializer initializer(String phone, String password) {
