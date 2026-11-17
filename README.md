@@ -14,17 +14,28 @@ Java 21, Spring Boot 3.5.16, Gradle 8.14(Kotlin DSL), MySQL 8, Redis 7, Flyway, 
 ## 구조
 
 ```
-                         ┌──── Nginx :80 (손님 화면 정적 파일 + /api 라운드 로빈, /ws 업그레이드) ────┐
-                         ▼                          ▼                          ▼
-                       app1                       app2                       app3     (같은 이미지, 상태 없음)
-                         │  Caffeine 30초 (판매일 설정·카탈로그)                    │
-          ┌──────────────┴──────────────────────────┬───────────────────────────────┘
-          ▼                                         ▼
-   Redis 7 (AOF)                              MySQL 8 (KST)
-   · 재고·1인 누적: Lua로 검사+차감 한 번에        · 조건부 UPDATE로 최종 확정
-   · Idempotency, 로그인 잠금, Refresh Token     · outbox_event (취소 복구·수량 늘리기)
-   · Pub/Sub: 캐시 무효화, 잔여 변경(C-03)        · Flyway V1·V2
-   · ShedLock (스케줄 작업은 앱 1개에서만)
+                    브라우저 (React 손님 화면)
+                     │  HTTP /api   │  STOMP /ws
+                     ▼              ▼
+        ┌────────── Nginx :80 ─────────────────────────────┐
+        │ 정적 파일(화면) · /api 라운드 로빈 · /ws 업그레이드  │
+        │ 연결 실패 시 다음 앱 · /actuator 404              │
+        └───────┬──────────────┬──────────────┬───────────┘
+                ▼              ▼              ▼
+              app1           app2           app3      Spring Boot 3.5, 상태 없음
+              (Caffeine 30초: 판매일 설정·카탈로그)
+                │              │              │
+        ┌───────┴──────────────┴──────────────┴───────┐
+        ▼                                             ▼
+   Redis 7 (AOF)                                 MySQL 8 (KST)
+   · 재고·1인 누적 (Lua 검사+차감)                 · 조건부 UPDATE로 최종 확정
+   · stockver + PUBLISH (실시간)                  · outbox_event (attempts·dead)
+   · Pub/Sub: 잔여 변경, 캐시 무효화               · Flyway V1~V4
+   · Idempotency, 요청 제한, 로그인 잠금
+   · Refresh Token, ShedLock
+
+   Prometheus ← /actuator/prometheus (앱 3개)  →  Grafana (대시보드·경고)
+   k6 (load/*.sh) → Nginx :8081 (X-Upstream으로 앱별 집계)
 ```
 
 **예약 한 건의 흐름** (`reservation` 패키지, Controller → Facade → Service → Domain → Repository)
@@ -34,7 +45,23 @@ Java 21, Spring Boot 3.5.16, Gradle 8.14(Kotlin DSL), MySQL 8, Redis 7, Flyway, 
 3. DB가 실패하면 1의 차감을 같은 Lua로 되돌린다(보상). 0행이면 409 `OUT_OF_STOCK`
 4. 잔여를 바꾼 Lua가 같은 스크립트에서 버전을 올리고 발행 → 앱마다 200ms씩 모아 STOMP로 구독자에게
 
-취소·직권 취소의 재고 복구와 수량 늘리기는 트랜잭셔널 아웃박스로 커밋과 함께 남기고, 5분마다 정합성 점검이 DB와 Redis의 차이를 고칩니다(같은 차이가 연속 2번 보일 때만).
+**취소**: DB 커밋(`status = 'RESERVED'` 조건부 UPDATE + `outbox_event`) → 커밋 직후 바로 Redis에 반영하고, 못 했으면(실패·앱 종료) 남은 이벤트를 폴러가 처리 → 복구 Lua는 `applied` 키를 SET NX로 잡아 같은 이벤트를 한 번만 적용
+
+**복구 장치** (ShedLock으로 앱 1개에서만, `batch` 패키지)
+
+| 작업 | 주기 | 하는 일 |
+|---|---|---|
+| 아웃박스 폴러 | 5초 | 남은 `outbox_event`(취소 복구·수량 늘리기)를 Redis에 반영. 10회째 실패하면 dead(정합성 점검이 맞춤) |
+| 정합성 점검 | 5분 | DB와 Redis 재고 차이를 고침. 같은 차이가 연속 2회 관측될 때만 |
+| 노쇼 처리 | 매일 21:00 | 그날 수령하지 않은(`RESERVED`) 예약을 `NO_SHOW`로 (조건부 UPDATE) |
+| 아웃박스 정리 | 매일 04:30 | 발행한 지 7일 지난 행 삭제 |
+| 탈퇴 해시 정리 | 매일 04:40 | 재가입 제한 기간(30일)이 지난 탈퇴 번호 해시 삭제 |
+
+**화면** (`frontend/src`)
+
+- `api/client.ts`: 401이면 토큰 재발급(single-flight, 동시에 여러 요청이 401이어도 재발급은 한 번) 후 한 번만 다시 보낸다
+- `realtime/stockSync.ts`(`StockSync`): 구독 → 오는 메시지는 버퍼 → 목록 조회 → 목록 `version`보다 큰 메시지만 적용
+- `reservation/idempotentSubmit.ts`(`IdempotentSubmitter`): Idempotency-Key를 보낼 내용(판매일·시간대·수량)별로 만든다. 같은 내용 재전송은 같은 키
 
 패키지: `common` `auth` `member` `catalog` `saledate` `reservation` `realtime` `admin` `batch`
 
@@ -115,7 +142,7 @@ Vite 개발 서버가 `/api`와 `/ws`를 `localhost:8080`으로 넘깁니다(`vi
    OPENAPI_URL=http://localhost/v3/api-docs npm run gen:api     # 앱 3개 환경에서
    ```
 3. 확인한다: `git diff src/api/schema.d.ts`로 바뀐 부분을 보고 `npm run build && npm test`. 응답 필드가 없어지거나 이름이 바뀌었으면 tsc가 쓰는 곳을 알려 준다
-4. 새로 null이 될 수 있는 응답 필드가 생겼으면 `src/api/types.ts`에 `| null`로 고쳐 적는다. springdoc은 응답 record 필드에 required를 붙이지 않아서, 생성할 때 `--properties-required-by-default`로 모두 필수로 만들고 null이 오는 필드만 직접 고친다(그 파일 위쪽 주석)
+4. null이 될 수 있는 응답 필드는 백엔드에서 `@Schema(nullable = true)`로 표시하면 생성 타입에 `| null`로 들어온다. `src/api/types.ts`에서 손으로 고치지 않는다. 생성할 때 붙이는 `--properties-required-by-default`는 그 파일 위쪽 주석 참고
 
 **스크린샷**
 
