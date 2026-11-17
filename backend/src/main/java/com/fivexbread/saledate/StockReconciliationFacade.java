@@ -42,6 +42,7 @@ public class StockReconciliationFacade {
     private final StockRedisSync stockRedisSync;
     private final AdminActionLogRepository adminActionLogRepository;
     private final ReconcileProperties properties;
+    private final StockAdjustmentMetrics adjustmentMetrics;
     private final Clock clock;
 
     public StockReconciliationResponse reconcile(LocalDate date, long adminId) {
@@ -97,6 +98,7 @@ public class StockReconciliationFacade {
         if (after == null) {                                          // 관측 뒤 키가 사라짐(만료·재시작)
             return new Item(breadId, null, second.db(), 0, Result.NO_KEY);
         }
+        adjustmentMetrics.record(StockAdjustmentMetrics.MANUAL, delta);
         log.warn("수량 재계산: Redis 잔여 보정 saleDate={} breadId={} redis={} db={} adjustment={} after={}",
                 date, breadId, second.redis(), second.db(), delta, after);
         return new Item(breadId, second.redis(), second.db(), delta, Result.ADJUSTED);

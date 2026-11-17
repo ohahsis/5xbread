@@ -109,6 +109,20 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
+    void MySQL_연결이_끊겨_트랜잭션을_열지_못하면_500이_아니라_503() throws Exception {
+        mockMvc.perform(get("/test/db-down"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
+    }
+
+    @Test
+    void JDBC_커넥션을_얻지_못하면_503() throws Exception {
+        mockMvc.perform(get("/test/jdbc-down"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
+    }
+
+    @Test
     void 깨진_JSON_본문은_400이고_Spring_기본_detail을_노출하지_않는다() throws Exception {
         mockMvc.perform(post("/test/validate")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -142,6 +156,17 @@ class ApiExceptionHandlerTest {
         @GetMapping("/test/redis-timeout")
         void redisTimeout() {
             throw new org.springframework.dao.QueryTimeoutException("Redis command timed out");
+        }
+
+        @GetMapping("/test/db-down")
+        void dbDown() {
+            throw new org.springframework.transaction.CannotCreateTransactionException(
+                    "Could not open JPA EntityManager for transaction", new java.sql.SQLException("Communications link failure", "08S01"));
+        }
+
+        @GetMapping("/test/jdbc-down")
+        void jdbcDown() {
+            throw new org.springframework.jdbc.CannotGetJdbcConnectionException("Failed to obtain JDBC Connection");
         }
 
         @GetMapping("/test/boom")

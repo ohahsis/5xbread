@@ -61,7 +61,7 @@ docker compose -f compose.full.yaml down        # 데이터까지 지우려면 -
 
 개발용 `compose.yaml`과 프로젝트 이름·볼륨이 달라 함께 띄워도 섞이지 않습니다. MySQL·Redis 포트는 호스트에 열지 않습니다. 앱 1개당 메모리 768MB(힙 75%).
 
-메트릭까지 보려면 `--profile monitoring`을 붙입니다. Prometheus `http://127.0.0.1:9090`, Grafana `http://127.0.0.1:3000`(대시보드 "5XBread 예약 v1/v2": 요청 p50·p95·p99, 초당 처리 수, HikariCP active·pending, Redis 명령 시간, 5xx). 앱의 `/actuator/prometheus`는 compose 네트워크 안에서만 열리고 Nginx는 `/actuator`를 404로 막습니다.
+메트릭까지 보려면 `--profile monitoring`을 붙입니다. Prometheus `http://127.0.0.1:9090`, Grafana `http://127.0.0.1:3000`(대시보드 "5XBread 예약 v1/v2": 요청 p50·p95·p99, 초당 처리 수, HikariCP active·pending, Redis 명령 시간, 5xx, "업무 지표" 줄: 아웃박스 미발행·dead, 노쇼 처리, Redis 잔여 보정. 경고 2개: 아웃박스 미발행이 5분 넘게 남음, dead 행이 있음. Grafana Alerting 화면에만 뜸). 앱의 `/actuator/prometheus`는 compose 네트워크 안에서만 열리고 Nginx는 `/actuator`를 404로 막습니다.
 
 ```bash
 docker compose -f compose.full.yaml --profile monitoring up -d --build --wait
@@ -76,6 +76,7 @@ docker compose -f compose.full.yaml --profile monitoring up -d --build --wait
 | `./load/realtime-check.sh` | STOMP 리스너 6개(앱 3개에 나뉨) + 예약 3건 | 모든 리스너가 버전 1·2·3을 순서대로 받고, 마지막 잔여 = Redis = 목록, 다른 앱이 처리한 예약도 받음 |
 
 | `./load/steady.sh --scenario spread\|hot --rate N` | 손님 10,000명(`load/seed-steady.sql`)이 초당 N건을 60초 동안. spread는 판매일 5 × 빵 20종, hot은 한 빵(총량 500)에 몰림 | 판매일·빵마다 예약 수량 = 예약 합 ≤ 총량, Redis 잔여 = DB(v2). 5xx·dropped는 결과로만 |
+| `./load/chaos.sh` | spread 초당 20건 × 180초(취소 섞음) 중에 Redis pause 30초 / app2 kill → start / MySQL restart를 하나씩. 모니터링 profile 필요 | 부하가 끝난 뒤 초과 예약 0, Redis = DB(100행), 아웃박스 미발행 0. 응답 코드 분포·회복 시간은 `load/results/chaos-{시각}/summary.md` |
 | `./load/compare.sh --rate-spread N --rate-hot M` | 예약 v1(`RESERVATION_MODE=db-only`) ↔ v2를 번갈아 3라운드, 워밍업 1회 버림. 모니터링 profile 필요 | 위 판정. 결과는 `load/results/{시각}/`(k6 summary JSON, Prometheus 값, `summary.md`) |
 
 테스트 손님은 운영 마이그레이션에 넣지 않고 이 스크립트들만 넣습니다(판매일은 `run.sh` 10일 뒤, `steady.sh` 20일 뒤부터 5일).
@@ -114,6 +115,21 @@ v1은 **재고·한도 검사를 DB로** 하는 방식(`RESERVATION_MODE=db-only
 |---|---|
 | ![burst v1](docs/measurements/images/burst-v1.png) | ![burst v2](docs/measurements/images/burst-v2.png) |
 
+## 장애 실험 (2026-11-17)
+
+`./load/chaos.sh`. 앱 3개에 초당 20건(예약 + 앞서 만든 예약의 취소 20%)을 180초 동안 보내며 30초 뒤에 장애를 하나 넣었습니다. 환경은 위와 같고 실험마다 1회입니다.
+
+| 장애 | 손님이 받은 응답 | 회복 | 끝난 뒤 정합성 |
+|---|---|---|---|
+| Redis 응답 없음 30초 (`docker pause`) | 예약 503 555건(각 약 2초), 취소는 모두 200(약 4초) | unpause 직후 오류 0. 장애 중 쌓인 아웃박스 93행은 최대 57초 뒤 모두 발행 | 초과 예약 0, Redis = DB, 미발행 0, dead 0 |
+| 앱 1개 다운 (`kill app2` → 20초 뒤 `start`) | 5xx **0**. 연결 실패 37건은 Nginx가 다른 앱으로 넘김(최대 2초) | app2는 start 18초 뒤부터 다시 요청을 받음 | 초과 예약 0, Redis = DB, 미발행 0, dead 0 |
+| MySQL 재시작 (`restart`) | 재시작 순간 약 1초 동안 503 30건, 그 뒤 약 3초는 기다렸다가 성공(최대 4.3초) | restart가 끝나기 전에 오류 0 | 초과 예약 0, Redis = DB, 미발행 0, dead 0 |
+
+- 실험에서 찾아 고친 것: MySQL 연결 장애가 500 `INTERNAL_ERROR`로 나가던 것을 Redis 장애와 같은 503으로 바꿨습니다
+- 응답만 멈춘 Redis(`pause`)는 클라이언트에서 시간 초과로 끝난 명령을 재개 뒤 그대로 실행합니다. 아웃박스는 멱등이라 영향이 없습니다. 같은 일로 Idempotency 처리 중 표시가 남아 같은 키가 24시간 409가 될 수 있던 것은 표시를 2분만 두도록 고쳤습니다(decisions.md 6장 "Idempotency 처리 중 TTL")
+- 아웃박스는 처리 실패를 `attempts`로 세고 10번째에 dead로 표시해 더 집지 않습니다. 그 재고는 N-05 정합성 점검이 맞춥니다(decisions.md 6장 "아웃박스 실패 한도")
+- 방법·초별 값·예상과 달랐던 것: [`docs/measurements/2026-11-17-chaos.md`](docs/measurements/2026-11-17-chaos.md)
+
 ## 1차 범위
 
 decisions.md 4장이 기준입니다. 요약:
@@ -125,4 +141,4 @@ decisions.md 4장이 기준입니다. 요약:
 
 ## 2차로 미룬 것
 
-프론트엔드 전체(손님·사장님 화면, 실시간 잔여 화면 포함), A-03 수량 복사, A-05 대시보드 실시간·픽업 준비 목록 인쇄, A-11 판매 통계, 탈퇴, 사진 WEBP 변환, 대시보드 경고, 아웃박스 실패 이벤트 dead letter, 오래된 데이터 아카이브. 전체 목록과 근거는 decisions.md 4장 "2차로 미룸"에 있습니다.
+프론트엔드 전체(손님·사장님 화면, 실시간 잔여 화면 포함), A-03 수량 복사, A-05 대시보드 실시간·픽업 준비 목록 인쇄, A-11 판매 통계, 탈퇴, 사진 WEBP 변환, 오래된 데이터 아카이브. (대시보드 경고·업무 지표, 아웃박스 dead letter, 장애 실험은 2차에서 완료) 전체 목록과 근거는 decisions.md 4장 "2차로 미룸"에 있습니다.

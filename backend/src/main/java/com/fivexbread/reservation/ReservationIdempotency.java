@@ -17,8 +17,10 @@ import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 
 /**
- * 예약 중복 제출 방지 (13-1 3단계, N-06, decisions.md 6장 "C-04 Idempotency 저장"). 키: idem:{Idempotency-Key}, TTL 24시간.
- * - 시작: SET NX 로 "PROCESSING:{지문}"을 넣는다. 지문 = SHA-256(memberId + 요청 본문)
+ * 예약 중복 제출 방지 (13-1 3단계, N-06, decisions.md 6장 "C-04 Idempotency 저장"). 키: idem:{Idempotency-Key}.
+ * - 시작: SET NX 로 "PROCESSING:{지문}"을 넣는다. 지문 = SHA-256(memberId + 요청 본문). TTL 은 처리 상한(기본 2분)만큼만 둔다.
+ *   지우지 못하고 남은 표시(release 전에 앱이 죽음, Redis 가 멈춘 사이 늦게 실행된 SET NX)가 같은 키의 재시도를 24시간 409 로 막지 않게 한다
+ *   (decisions.md 6장 "Idempotency 처리 중 TTL"). 만료 뒤 이미 저장된 예약과 같은 키가 다시 오면 DB UNIQUE 가 막는다
  * - 성공(201)만 커밋 후 {지문, 201, Location, 본문}으로 바꿔 저장한다. 같은 지문의 재요청은 저장된 201 을 그대로 돌려준다
  * - 실패(422·409·500)는 키를 지워 같은 키로 다시 시도할 수 있게 한다. 실패는 부작용이 없고, 재고 부족은 취소가 생기면 성공할 수 있다
  * - 처리 중이면 409 IDEMPOTENCY_IN_PROGRESS, 지문이 다르면(다른 회원·다른 본문) 422 IDEMPOTENCY_KEY_MISMATCH
@@ -62,7 +64,7 @@ public class ReservationIdempotency {
     public Optional<StoredResponse> begin(String key, String fingerprint) {
         for (int attempt = 0; attempt < 3; attempt++) {
             Boolean created = redisTemplate.opsForValue()
-                    .setIfAbsent(redisKey(key), PROCESSING + fingerprint, properties.idempotencyTtl()); // 처음
+                    .setIfAbsent(redisKey(key), PROCESSING + fingerprint, properties.idempotencyProcessingTtl()); // 처음
             if (Boolean.TRUE.equals(created)) {
                 return Optional.empty();
             }
@@ -83,7 +85,7 @@ public class ReservationIdempotency {
         throw new BusinessException(ErrorCode.IDEMPOTENCY_IN_PROGRESS);
     }
 
-    /** 커밋 후 성공 응답을 저장한다. TTL 은 다시 24시간 */
+    /** 커밋 후 성공 응답을 저장한다. TTL 은 이때부터 24시간 */
     public void complete(String key, String fingerprint, String location, Object body) {
         StoredResponse stored = new StoredResponse(fingerprint, 201, location, objectMapper.valueToTree(body));
         try {

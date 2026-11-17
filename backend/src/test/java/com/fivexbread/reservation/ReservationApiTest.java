@@ -12,6 +12,7 @@ import com.fivexbread.support.IntegrationTestSupport;
 import com.fivexbread.support.MutableClock;
 import com.fivexbread.support.MutableClockConfig;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -188,6 +190,46 @@ class ReservationApiTest extends IntegrationTestSupport {
         assertThat(inProgress.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(inProgress.getBody().get("code").asText()).isEqualTo("IDEMPOTENCY_IN_PROGRESS");
         assertThat(redis.hasKey(ReservationIdempotency.redisKey(processing.toString()))).isTrue();   // 남의 표시는 지우지 않음
+    }
+
+    @Test
+    void 처리_중_표시는_처리_상한_뒤_만료되고_성공_응답은_24시간_보관한다() {
+        long member = data.memberId();
+        Map<String, Object> request = body(Map.of(3L, 1));
+        String fingerprint = idempotency.fingerprint(member, new ReservationCreateRequest(date, slot,
+                List.of(new ReservationCreateRequest.Item(3L, 1))));
+
+        // 처리 중 표시만 남은 상태: release 전에 앱이 죽었거나, Redis 가 멈춘 사이 시간 초과로 끝난 SET NX 가 늦게 실행됨
+        UUID stuck = UUID.randomUUID();
+        assertThat(idempotency.begin(stuck.toString(), fingerprint)).isEmpty();
+        assertThat(redis.getExpire(ReservationIdempotency.redisKey(stuck.toString()), TimeUnit.SECONDS))
+                .isBetween(1L, 120L);                                           // 24시간이 아니라 처리 상한(2분)
+        assertThat(post(member, stuck, request).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+
+        redis.delete(ReservationIdempotency.redisKey(stuck.toString()));       // 만료
+        ResponseEntity<JsonNode> retried = post(member, stuck, request);
+        assertThat(retried.getStatusCode()).isEqualTo(HttpStatus.CREATED);    // 같은 키로 다시 예약된다
+        assertThat(redis.getExpire(ReservationIdempotency.redisKey(stuck.toString()), TimeUnit.SECONDS))
+                .isGreaterThan(Duration.ofHours(23).toSeconds());               // 성공 응답은 24시간
+    }
+
+    @Test
+    void 성공_응답을_저장하지_못한_채_처리_중_표시가_만료되면_같은_키는_DB_UNIQUE에_걸려_422이고_예약은_1건() {
+        long member = data.memberId();
+        UUID key = UUID.randomUUID();
+        assertThat(post(member, key, body(Map.of(3L, 2))).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        int stockAfterFirst = redisStock(3);
+
+        redis.delete(ReservationIdempotency.redisKey(key.toString()));          // complete 실패 + 처리 중 표시 만료
+        ResponseEntity<JsonNode> again = post(member, key, body(Map.of(3L, 2)));
+
+        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(again.getBody().get("code").asText()).isEqualTo("IDEMPOTENCY_KEY_MISMATCH");
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM reservation WHERE sale_date = ?", Integer.class,
+                date)).isEqualTo(1);
+        assertThat(reserved(3)).isEqualTo(2);
+        assertThat(redisStock(3)).isEqualTo(stockAfterFirst);                   // 두 번째 차감은 되돌림
+        assertThat(redis.hasKey(ReservationIdempotency.redisKey(key.toString()))).isFalse();
     }
 
     @Test

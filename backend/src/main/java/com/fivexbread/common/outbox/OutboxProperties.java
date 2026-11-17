@@ -13,9 +13,10 @@ import org.springframework.validation.annotation.Validated;
  * @param batchSize    한 번에 읽는 행 수
  * @param maxBatches   폴러 1회 실행에서 읽는 최대 묶음 수 (batchSize × maxBatches 건까지)
  * @param retention    발행한 행을 지우기 전까지 보관하는 기간
+ * @param maxAttempts  처리 실패 한도. 이 횟수째 실패하면 dead 로 표시하고 더 시도하지 않는다 (decisions.md 6장 "아웃박스 실패 한도")
  */
 @Validated
 @ConfigurationProperties("fivexbread.outbox")
 public record OutboxProperties(@NotNull Duration relayDelay, @Min(1) int batchSize, @Min(1) int maxBatches,
-                               @NotNull Duration retention) {
+                               @NotNull Duration retention, @Min(1) int maxAttempts) {
 }
