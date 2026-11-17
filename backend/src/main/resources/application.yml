@@ -2,8 +2,8 @@
 spring:
   application:
     name: fivexbread
-  profiles:
-    default: local
+  # 기본 프로필을 두지 않는다. 실행할 때 local(개발)·docker(앱 3개)·test 중 하나를 직접 켠다.
+  # 아무것도 켜지 않으면 .env 를 읽지 않아 JWT_SECRET 등이 비어 앱이 뜨지 않는다(잘못 띄운 것을 바로 알게)
   task:
     scheduling:
       pool:

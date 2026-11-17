@@ -33,7 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 @WebMvcTest(controllers = ApiExceptionHandlerTest.TestController.class)
 @AutoConfigureMockMvc(addFilters = false)
 @Import({ApiExceptionHandlerTest.TestController.class, ApiExceptionHandler.class})
-@ActiveProfiles("test")   // 기본 프로필(local)이면 .env 를 읽고 SQL 바인딩 값을 TRACE 로 남겨 다른 테스트 로그에도 섞인다
+@ActiveProfiles("test")   // 기본 프로필이 없어 프로필을 켜지 않으면 비밀 키가 비어 컨텍스트가 뜨지 않는다
 class ApiExceptionHandlerTest {
 
     @Autowired
