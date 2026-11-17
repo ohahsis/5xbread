@@ -2,10 +2,11 @@ package com.fivexbread.batch;
 
 import com.fivexbread.reservation.NoShowService;
 import com.fivexbread.reservation.NoShowService.Chunk;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -17,10 +18,12 @@ import org.springframework.stereotype.Component;
  * 대상은 오늘과, 최근 CATCH_UP_DAYS 일 안에서 아직 RESERVED 가 남은 지난 판매일이다(decisions.md 6장 "A-07 이어받기").
  * 그날 21:00 에 앱이 모두 내려가 있었거나 처리 중 죽었으면 다음 실행이 이어서 처리한다. R-17 은 판매일 기준으로 센다.
  * 이어받는 기간(7일)이 제한 기간(14일)보다 짧아, 늦게 처리해도 제한 끝(판매일 + 14일)은 항상 오늘 이후다.
+ *
+ * 처리 건수는 로그와 함께 카운터로 남긴다 (fivexbread_noshow_marked_total·_blocked_total, decisions.md 6장 "업무 지표").
+ * 묶음마다 커밋된 만큼 바로 올리므로 처리 중 죽어도 이미 커밋된 건수는 남는다.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class NoShowBatch {
 
     static final int CHUNK_SIZE = 1_000;
@@ -28,6 +31,17 @@ public class NoShowBatch {
 
     private final NoShowService noShowService;
     private final Clock clock;
+    private final Counter markedCounter;
+    private final Counter blockedCounter;
+
+    public NoShowBatch(NoShowService noShowService, Clock clock, MeterRegistry meterRegistry) {
+        this.noShowService = noShowService;
+        this.clock = clock;
+        this.markedCounter = Counter.builder("fivexbread.noshow.marked").description("노쇼로 바꾼 예약 수 (A-07)")
+                .register(meterRegistry);
+        this.blockedCounter = Counter.builder("fivexbread.noshow.blocked").description("R-17 로 예약을 제한한 회원 수")
+                .register(meterRegistry);
+    }
 
     public void run() {
         LocalDate today = LocalDate.now(clock);
@@ -60,6 +74,7 @@ public class NoShowBatch {
         do {
             chunk = noShowService.markChunk(saleDate, CHUNK_SIZE);
             total += chunk.marked();
+            markedCounter.increment(chunk.marked());
         } while (chunk.candidates() > 0);
         return total;
     }
@@ -68,7 +83,9 @@ public class NoShowBatch {
         int blocked = 0;
         for (int from = 0; from < memberIds.size(); from += CHUNK_SIZE) {
             int to = Math.min(from + CHUNK_SIZE, memberIds.size());
-            blocked += noShowService.applyBlocks(memberIds.subList(from, to), saleDate);
+            int applied = noShowService.applyBlocks(memberIds.subList(from, to), saleDate);
+            blocked += applied;
+            blockedCounter.increment(applied);
         }
         return blocked;
     }

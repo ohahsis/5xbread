@@ -41,6 +41,7 @@ public class StockReconciler {
     private final StringRedisTemplate redisTemplate;
     private final LockProvider lockProvider;
     private final ReconcileProperties properties;
+    private final StockAdjustmentMetrics adjustmentMetrics;
     private final Clock clock;
 
     /** @param redis Redis 잔여, 키가 없으면 null / db DB 기준 잔여 */
@@ -128,6 +129,9 @@ public class StockReconciler {
                     log.warn("정합성 점검: Redis 잔여 보정 saleDate={} breadId={} redis={} db={} adjustment={} after={}",
                             date, observation.breadId(), observation.redis(), observation.db(), delta, after);
                     redisTemplate.delete(seenKey);
+                    if (after != null) {                              // null: 관측 뒤 키가 사라져 보정하지 않음
+                        adjustmentMetrics.record(StockAdjustmentMetrics.SCHEDULED, delta);
+                    }
                     adjusted++;
                 }
                 continue;                                             // 너무 이른 재관측은 2회로 세지 않고 첫 관측을 유지

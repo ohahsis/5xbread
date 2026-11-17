@@ -11,6 +11,7 @@ import com.fivexbread.support.Concurrently;
 import com.fivexbread.support.IntegrationTestSupport;
 import com.fivexbread.support.MutableClock;
 import com.fivexbread.support.MutableClockConfig;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -44,6 +45,9 @@ class NoShowBatchTest extends IntegrationTestSupport {
 
     @Autowired
     NoShowBatch noShowBatch;
+
+    @Autowired
+    MeterRegistry meterRegistry;
 
     @Autowired
     NoShowService noShowService;
@@ -93,8 +97,11 @@ class NoShowBatchTest extends IntegrationTestSupport {
         long tomorrow = reservation(member, today.plusDays(1), "RESERVED");
         long weekAgo = reservation(member, today.minusDays(7), "RESERVED");         // 처리를 못 한 날: 이어받는다
         long eightDaysAgo = reservation(member, today.minusDays(8), "RESERVED");    // 이어받는 기간 밖
+        double markedBefore = counter("fivexbread.noshow.marked");
 
         noShowBatch.run();
+
+        assertThat(counter("fivexbread.noshow.marked")).isEqualTo(markedBefore + 2);   // 오늘·7일 전
 
         assertThat(status(reserved)).isEqualTo("NO_SHOW");
         assertThat(status(pickedUp)).isEqualTo("PICKED_UP");
@@ -120,10 +127,16 @@ class NoShowBatchTest extends IntegrationTestSupport {
         LocalDate missed = today.minusDays(3);
         reservation(member, missed.minusDays(20), "NO_SHOW");
         reservation(member, missed, "RESERVED");
+        double blockedBefore = counter("fivexbread.noshow.blocked");
 
         noShowBatch.run();
 
         assertThat(blockedUntil(member)).isEqualTo(missed.plusDays(14));
+        assertThat(counter("fivexbread.noshow.blocked")).isEqualTo(blockedBefore + 1);
+    }
+
+    private double counter(String name) {
+        return meterRegistry.get(name).counter().count();
     }
 
     @Test

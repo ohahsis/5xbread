@@ -1,0 +1,55 @@
+# 아웃박스 경고 2개 (decisions.md 6장 "업무 지표"). 연락처(메일·메신저)는 두지 않아 Grafana 화면(Alerting)에만 뜬다
+# 값은 앱마다 15초에 한 번 DB 에서 읽은 gauge(OutboxMetrics). 앱 3개가 같은 값을 내므로 max 로 본다
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: outbox
+    folder: 5XBread
+    interval: 30s
+    rules:
+      - uid: fivexbread-outbox-pending
+        title: 아웃박스 미발행이 5분 넘게 남아 있음
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model: {refId: A, expr: max(fivexbread_outbox_pending), instant: true}
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+        for: 5m                     # 평소에는 커밋 직후 바로 발행되고, 남아도 폴러가 10초 뒤 처리한다
+        noDataState: NoData
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: 아웃박스 미발행 행이 5분 넘게 0보다 큼
+          description: 폴러가 돌지 못하거나(Redis 장애로 ShedLock 을 못 잡음, 앱 전부 다운) 처리가 계속 실패한다. Redis·앱 로그의 "아웃박스" 를 확인
+      - uid: fivexbread-outbox-dead
+        title: 아웃박스 dead 행이 있음
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model: {refId: A, expr: max(fivexbread_outbox_dead), instant: true}
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+        for: 0s                     # 사람이 확인해야 하는 상태. dead 행을 정리하기 전까지 켜져 있다
+        noDataState: NoData
+        execErrState: Error
+        labels: {severity: critical}
+        annotations:
+          summary: 처리 실패 한도에 닿아 더 시도하지 않는 아웃박스 행이 있음
+          description: 재고는 N-05 정기 점검이 최대 약 10분 안에 맞춘다. 맞춰진 것을 확인한 뒤 dead 행을 지운다 (decisions.md 6장 "아웃박스 실패 한도"의 확인 절차)

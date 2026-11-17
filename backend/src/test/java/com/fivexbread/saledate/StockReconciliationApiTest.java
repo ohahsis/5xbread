@@ -11,6 +11,7 @@ import com.fivexbread.member.Role;
 import com.fivexbread.support.IntegrationTestSupport;
 import com.fivexbread.support.MutableClock;
 import com.fivexbread.support.MutableClockConfig;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -41,6 +42,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 class StockReconciliationApiTest extends IntegrationTestSupport {
 
     private static final long ADMIN_ID = 9_000_002L;
+
+    @Autowired
+    MeterRegistry meterRegistry;
 
     @Autowired
     TestRestTemplate restTemplate;
@@ -97,7 +101,13 @@ class StockReconciliationApiTest extends IntegrationTestSupport {
 
     @Test
     void 바로_보정하고_201로_빵별_이전_값_DB_기준_값_보정량을_돌려주며_기록을_남긴다() throws Exception {
+        double adjustmentsBefore = adjustmentCounter("fivexbread.reconcile.adjustments");
+        double quantityBefore = adjustmentCounter("fivexbread.reconcile.adjusted.quantity");
+
         ResponseEntity<JsonNode> response = post(date, Role.ADMIN);
+
+        assertThat(adjustmentCounter("fivexbread.reconcile.adjustments")).isEqualTo(adjustmentsBefore + 1);
+        assertThat(adjustmentCounter("fivexbread.reconcile.adjusted.quantity")).isEqualTo(quantityBefore + 5);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         JsonNode body = response.getBody();
@@ -182,6 +192,10 @@ class StockReconciliationApiTest extends IntegrationTestSupport {
         headers.setBearerAuth(jwtProvider.issue(role == Role.ADMIN ? ADMIN_ID : data.memberId(), role, false));
         return restTemplate.exchange("/api/v1/admin/sale-dates/" + saleDate + "/stock-reconciliations",
                 HttpMethod.POST, new HttpEntity<>(headers), JsonNode.class);
+    }
+
+    private double adjustmentCounter(String name) {                // A-12: Redis 가 적어(35 < 40) 늘림
+        return meterRegistry.get(name).tag("source", "manual").tag("direction", "redis_low").counter().count();
     }
 
     private static List<String> rows(JsonNode body) {
