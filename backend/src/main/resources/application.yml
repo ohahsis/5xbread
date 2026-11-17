@@ -4,6 +4,12 @@ spring:
     name: fivexbread
   profiles:
     default: local
+  task:
+    scheduling:
+      pool:
+        # @Scheduled 작업 스레드 (SchedulerLockConfig.taskScheduler 가 builder 로 받는다). 기본 1개면 노쇼 배치·정합성 점검이
+        # 도는 동안 5초 주기 아웃박스 폴러·지표 갱신이 줄 서서 기다린다
+        size: 4
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:3306/fivexbread?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
     username: ${DB_USERNAME:fivexbread}
