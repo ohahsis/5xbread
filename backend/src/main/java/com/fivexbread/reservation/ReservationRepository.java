@@ -12,6 +12,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface ReservationRepository extends JpaRepository<Reservation, Long> {
 
+    /** Idempotency-Key 로 커밋된 예약 찾기 (uk_reservation_idem). DB 실패 뒤 실제로 커밋됐는지 확인할 때 쓴다 */
+    Optional<Reservation> findByIdempotencyKey(String idempotencyKey);
+
     /** 손님 본인 예약. PK 로 1행을 찾은 뒤 member_id 를 비교해 추가 인덱스가 필요 없다 (13-2 어필 포인트) */
     Optional<Reservation> findByIdAndMemberId(long id, long memberId);
 
@@ -98,7 +101,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
                                          @Param("to") LocalDate to, @Param("threshold") int threshold);
 
     /**
-     * 그날 손님의 예약 건수(취소 제외). Redis user_qty 의 건수 필드를 다시 채울 때의 기준으로만 쓴다 (decisions.md 6장).
+     * 그날 손님의 예약 건수(취소 제외). Redis user_qty 의 건수 필드를 다시 채울 때의 기준, 예약 트랜잭션의 하루 건수 검사(v1·v2)에 쓴다.
      * ix_resv_member_status (member_id, status, sale_date) 커버링.
      */
     @Query(value = """

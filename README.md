@@ -91,7 +91,7 @@ docker compose -f compose.full.yaml down        # 데이터까지 지우려면 -
 
 개발용 `compose.yaml`과 프로젝트 이름·볼륨이 달라 함께 띄워도 섞이지 않습니다. MySQL·Redis 포트는 호스트에 열지 않습니다. 앱 1개당 메모리 768MB(힙 75%).
 
-메트릭까지 보려면 `--profile monitoring`을 붙입니다. Prometheus `http://127.0.0.1:9090`, Grafana `http://127.0.0.1:3000`(대시보드 "5XBread 예약 v1/v2": 요청 p50·p95·p99, 초당 처리 수, HikariCP active·pending, Redis 명령 시간, 5xx, "업무 지표" 줄: 아웃박스 미발행·dead, 노쇼 처리, Redis 잔여 보정. 경고 2개: 아웃박스 미발행이 5분 넘게 남음, dead 행이 있음. Grafana Alerting 화면에만 뜸). 앱의 `/actuator/prometheus`는 compose 네트워크 안에서만 열리고 Nginx는 `/actuator`를 404로 막습니다.
+메트릭까지 보려면 `--profile monitoring`을 붙입니다. Prometheus `http://127.0.0.1:9090`, Grafana `http://127.0.0.1:3000`(대시보드 "5XBread 예약 v1/v2": 요청 p50·p95·p99, 초당 처리 수, HikariCP active·pending, Redis 명령 시간, 5xx, "업무 지표" 줄: 아웃박스 미발행·dead, 노쇼 처리, Redis 잔여 보정, 예약 한도 DB 재검사 거절. 경고 2개: 아웃박스 미발행이 5분 넘게 남음, dead 행이 있음. Grafana Alerting 화면에만 뜸). 앱의 `/actuator/prometheus`는 compose 네트워크 안에서만 열리고 Nginx는 `/actuator`를 404로 막습니다.
 
 ```bash
 docker compose -f compose.full.yaml --profile monitoring up -d --build --wait

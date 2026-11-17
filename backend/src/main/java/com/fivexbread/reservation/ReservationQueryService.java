@@ -7,6 +7,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -47,6 +48,18 @@ public class ReservationQueryService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         return ReservationDetailResponse.of(reservation,
                 items(List.of(reservation)).getOrDefault(reservationId, List.of()), LocalDateTime.now(clock));
+    }
+
+    /**
+     * Idempotency-Key 로 이미 커밋된 예약을 예약 생성 응답(201) 모양으로 (ReservationFacade 의 DB 실패 뒤 확인).
+     * 항목·이름·시각을 모두 DB 에서 다시 읽어, 같은 키 재요청이 받는 저장된 응답과 똑같다. 남의 키면 없는 것으로 본다.
+     */
+    @Transactional(readOnly = true)
+    public Optional<ReservationResponse> findCreated(long memberId, String idempotencyKey) {
+        return reservationRepository.findByIdempotencyKey(idempotencyKey)
+                .filter(reservation -> reservation.getMemberId() == memberId)
+                .map(reservation -> ReservationResponse.of(reservation,
+                        items(List.of(reservation)).getOrDefault(reservation.getId(), List.of())));
     }
 
     private Map<Long, List<ItemResponse>> items(List<Reservation> reservations) {

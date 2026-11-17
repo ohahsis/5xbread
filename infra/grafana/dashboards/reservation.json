@@ -660,6 +660,57 @@
           "legendFormat": "{{source}} {{direction}}"
         }
       ]
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "예약 한도 DB 재검사 거절 (선택 구간)",
+      "description": "예약 v2 에서 Redis Lua 는 통과했지만 트랜잭션 안의 DB 재검사(하루 건수·1인 한도)에서 막힌 요청 수. 0 이 아니면 Redis user_qty 가 DB 보다 느슨하게 어긋난 것 (decisions.md 6장 \"예약 v2 한도 DB 재검사\")",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 33,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "horizontal"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "sum by (reason) (increase(fivexbread_reservation_limit_db_reject_total[$__range]))",
+          "legendFormat": "{{reason}}"
+        }
+      ]
     }
   ]
 }
