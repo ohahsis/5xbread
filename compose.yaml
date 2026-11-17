@@ -13,7 +13,7 @@ services:
       - --collation-server=utf8mb4_0900_ai_ci
       - --default-time-zone=+09:00
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"     # 내 PC 에서만. 0.0.0.0 이면 같은 네트워크(카페 와이파이 등)에서 DB 에 붙을 수 있다
     volumes:
       - mysql-data:/var/lib/mysql
 
@@ -21,7 +21,7 @@ services:
     image: redis:7
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"     # Redis 는 비밀번호가 없어 밖에 열면 누구나 읽고 쓴다
     volumes:
       - redis-data:/data
 
