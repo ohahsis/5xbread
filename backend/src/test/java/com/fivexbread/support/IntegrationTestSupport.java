@@ -21,7 +21,11 @@ public abstract class IntegrationTestSupport {
             .withCommand("--character-set-server=utf8mb4",
                     "--collation-server=utf8mb4_0900_ai_ci",
                     "--default-time-zone=+09:00",
-                    "--max-connections=500");
+                    "--max-connections=500")
+            // @ServiceConnection 은 application.yml 의 URL 대신 컨테이너 URL 을 쓰므로 시간 제한·락 대기를 여기에도 같게 둔다
+            .withUrlParam("connectTimeout", "2000")
+            .withUrlParam("socketTimeout", "10000")
+            .withUrlParam("sessionVariables", "innodb_lock_wait_timeout=5");
 
     @ServiceConnection(name = "redis")
     static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7").withExposedPorts(6379);

@@ -11,9 +11,14 @@ spring:
         # 도는 동안 5초 주기 아웃박스 폴러·지표 갱신이 줄 서서 기다린다
         size: 4
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:3306/fivexbread?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    # connectTimeout 2초: 죽은 DB 에 연결을 붙잡고 있지 않는다. socketTimeout 10초: 응답 없는 쿼리를 끊는다(기본 무제한).
+    # 배치 쿼리도 10초 안에 끝나야 한다. innodb_lock_wait_timeout 5초(기본 50초): 락 대기가 소켓 시간 제한보다 먼저 끝나
+    # 연결 장애(503)가 아니라 락 실패(409 LOCK_CONFLICT)가 된다 (decisions.md 6장 "DB 시간 제한")
+    url: jdbc:mysql://${DB_HOST:localhost}:3306/fivexbread?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&connectTimeout=2000&socketTimeout=10000&sessionVariables=innodb_lock_wait_timeout=5
     username: ${DB_USERNAME:fivexbread}
     password: ${DB_PASSWORD:}
+    hikari:
+      connection-timeout: 3000    # ms(Hikari 는 Duration 이 아니라 숫자). 풀에서 커넥션을 기다리는 시간(기본 30초). DB 장애·풀 고갈 때 요청이 30초씩 멈추지 않게
   jpa:
     open-in-view: false
     hibernate:
@@ -28,6 +33,17 @@ spring:
       port: 6379
       connect-timeout: 1s
       timeout: 2s                 # 기본 60초면 Redis 장애 때 요청마다 60초 멈춘다. 목록의 DB 폴백·예약 503 이 이 시간 뒤에 나온다
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true             # /actuator/health/readiness·liveness. compose.full.yaml healthcheck 가 readiness 로 준비 완료를 본다
+      group:
+        readiness:
+          # 준비 완료에 DB 연결도 본다. readinessState 는 probes 를 켜야 생기므로 같은 파일에 둔다.
+          # MySQL 이 멈추면 앱 3개가 모두 unready 가 되지만 Nginx 는 healthcheck 를 보지 않아 요청 흐름은 그대로다
+          include: readinessState,db
 
 springdoc:
   default-produces-media-type: application/json   # 응답 content type 을 */* 가 아니라 실제와 같게 (프론트 타입 생성)
@@ -64,7 +80,7 @@ fivexbread:
     max-total-quantity: 20        # Q-07: 예약 1건 최대 총수량
     rate-limit-per-second: 5      # N-23: 회원당 초당 예약 요청
     idempotency-ttl: 24h          # N-06: Idempotency 결과(성공 201) 보관
-    idempotency-processing-ttl: 2m   # 처리 중 표시 보관. 요청 처리 상한(Hikari 대기 30초 + 쿼리)보다 길게. 남은 표시가 하루 동안 409 를 내지 않도록
+    idempotency-processing-ttl: 2m   # 처리 중 표시 보관. 요청 처리 상한(Hikari 대기 3초 + 쿼리 10초)보다 길게. 남은 표시가 하루 동안 409 를 내지 않도록
     mode: ${RESERVATION_MODE:redis}   # redis(v2, 운영) | db-only(v1, 재고·한도 검사를 DB로. 비교 측정용, docker·test 프로필에서만)
   catalog-cache:
     ttl: 30s                      # 부록 B: 빵 정보 로컬 캐시. 무효화 메시지가 유실돼도 이 시간 뒤에는 맞는다
