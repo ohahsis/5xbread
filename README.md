@@ -1,6 +1,6 @@
 # 5XBread
 
-동네 빵집의 빵을 판매일·픽업 시간대별로 미리 예약하는 서비스의 백엔드입니다. 앱 3개를 동시에 띄운 환경에서도 **초과 예약 0건**을 지키는 것이 핵심입니다.
+동네 빵집의 빵을 판매일·픽업 시간대별로 미리 예약하는 서비스의 백엔드와 손님 화면(최소 버전, `frontend/`)입니다. 앱 3개를 동시에 띄운 환경에서도 **초과 예약 0건**을 지키는 것이 핵심입니다.
 
 - 확정한 결정·범위: [`docs/decisions.md`](docs/decisions.md) (정의서와 다르면 이 문서가 우선)
 - 엣지 케이스 E-01~E-15와 증명하는 테스트: [`docs/edge-cases.md`](docs/edge-cases.md)
@@ -9,10 +9,12 @@
 
 Java 21, Spring Boot 3.5.16, Gradle 8.14(Kotlin DSL), MySQL 8, Redis 7, Flyway, Spring Security + JWT, STOMP WebSocket, Caffeine, ShedLock, Nginx, Micrometer + Prometheus·Grafana, Testcontainers, k6(부하 확인), GitHub Actions
 
+화면: React 19 + TypeScript + Vite, TanStack Query, React Router, @stomp/stompjs, CSS Modules, Vitest. API 타입은 springdoc 명세에서 openapi-typescript로 생성
+
 ## 구조
 
 ```
-                         ┌──────────── Nginx :80 (라운드 로빈, /ws 업그레이드) ────────────┐
+                         ┌──── Nginx :80 (손님 화면 정적 파일 + /api 라운드 로빈, /ws 업그레이드) ────┐
                          ▼                          ▼                          ▼
                        app1                       app2                       app3     (같은 이미지, 상태 없음)
                          │  Caffeine 30초 (판매일 설정·카탈로그)                    │
@@ -81,6 +83,49 @@ docker compose -f compose.full.yaml --profile monitoring up -d --build --wait
 
 테스트 손님은 운영 마이그레이션에 넣지 않고 이 스크립트들만 넣습니다(판매일은 `run.sh` 10일 뒤, `steady.sh` 20일 뒤부터 5일).
 
+### 4. 손님 화면 (`frontend/`)
+
+Node 22가 필요합니다(`frontend/.nvmrc`). 화면: 로그인·가입, 판매일 빵 목록 + 실시간 잔여, 예약, 내 예약 목록·상세·취소, 픽업 QR. 사장님 화면은 아직 없습니다.
+
+**개발** (앱 1개를 `bootRun`으로 띄운 뒤)
+
+```bash
+cd frontend
+npm ci
+npm run dev          # http://localhost:5173
+npm test             # 단위 테스트 (Vitest)
+npm run build        # 타입 검사(tsc) + 빌드 → dist/
+```
+
+Vite 개발 서버가 `/api`와 `/ws`를 `localhost:8080`으로 넘깁니다(`vite.config.ts`). 화면과 API가 같은 출처라 CORS와 WebSocket Origin 설정이 필요 없습니다.
+
+**앱 3개 환경**: 위 2번의 `docker compose -f compose.full.yaml up -d --build --wait` 하나로 화면까지 뜹니다. `frontend/Dockerfile`이 Node 컨테이너에서 빌드해 Nginx 이미지에 넣고, Nginx가 `/api/`·`/ws`는 앱 3개로, 나머지는 정적 파일(`try_files ... /index.html`)로 응답합니다. 화면을 고친 뒤에는 `docker compose -f compose.full.yaml up -d --build nginx`. `http://localhost`로 접속해야 합니다: Refresh 쿠키가 `Secure`라 HTTP에서는 `localhost`만 브라우저가 예외로 받아 줍니다. LAN IP 등 다른 주소로 열면 로그인이 새로고침 뒤 유지되지 않습니다.
+
+**API 타입 다시 만들기** (`frontend/src/api/schema.d.ts`)
+
+`schema.d.ts`는 생성물이지만 커밋합니다. 그래야 CI와 Docker 빌드가 백엔드 없이 타입 검사를 할 수 있습니다. 백엔드의 요청·응답(컨트롤러, DTO record, enum)을 바꾼 PR이 머지되면 아래 순서로 다시 만들어 같은 PR(또는 바로 다음 PR)에 넣습니다.
+
+1. 바뀐 백엔드를 띄운다. 이 브랜치를 main 위로 rebase했다면 rebase한 코드로 띄워야 한다
+   - 앱 1개: `cd backend && ./gradlew bootRun --args='--spring.profiles.active=local'` → 명세 `http://localhost:8080/v3/api-docs`
+   - 또는 앱 3개: `docker compose -f compose.full.yaml up -d --build --wait` → 명세 `http://localhost/v3/api-docs` (`--build`를 빼면 예전 이미지의 명세가 나온다)
+2. 생성한다
+   ```bash
+   cd frontend
+   npm run gen:api                                              # 기본: http://localhost:8080/v3/api-docs
+   OPENAPI_URL=http://localhost/v3/api-docs npm run gen:api     # 앱 3개 환경에서
+   ```
+3. 확인한다: `git diff src/api/schema.d.ts`로 바뀐 부분을 보고 `npm run build && npm test`. 응답 필드가 없어지거나 이름이 바뀌었으면 tsc가 쓰는 곳을 알려 준다
+4. 새로 null이 될 수 있는 응답 필드가 생겼으면 `src/api/types.ts`에 `| null`로 고쳐 적는다. springdoc은 응답 record 필드에 required를 붙이지 않아서, 생성할 때 `--properties-required-by-default`로 모두 필수로 만들고 null이 오는 필드만 직접 고친다(그 파일 위쪽 주석)
+
+**스크린샷**
+
+| 화면 | |
+|---|---|
+| 빵 목록 + 실시간 잔여 (비로그인) | <img src="docs/images/frontend-breads.png" width="420"> |
+| 예약 실패: 빵별 재고 부족 (409 `errors[]`) | <img src="docs/images/frontend-out-of-stock.png" width="420"> |
+| 예약 상세 + 픽업 QR + 취소 마감 안내 | <img src="docs/images/frontend-detail-qr.png" width="420"> |
+| 내 예약 목록 | <img src="docs/images/frontend-my-reservations.png" width="420"> |
+
 ## 측정값 (1차 마무리, 2026-11-16, main `3849e0b`)
 
 환경: Mac(Intel i7-9750H 6코어 12스레드, 메모리 32GB), macOS 26.7, Docker Desktop(VM 12 CPU, 8GB). 앱 3개는 각 768MB, MySQL·Redis·Nginx·k6가 같은 머신에서 함께 돕니다. 첫 실행(워밍업)을 버리고 측정했습니다.
@@ -141,4 +186,4 @@ decisions.md 4장이 기준입니다. 요약:
 
 ## 2차로 미룬 것
 
-프론트엔드 전체(손님·사장님 화면, 실시간 잔여 화면 포함), A-03 수량 복사, A-05 대시보드 실시간·픽업 준비 목록 인쇄, A-11 판매 통계, 탈퇴, 사진 WEBP 변환, 오래된 데이터 아카이브. (대시보드 경고·업무 지표, 아웃박스 dead letter, 장애 실험은 2차에서 완료) 전체 목록과 근거는 decisions.md 4장 "2차로 미룸"에 있습니다.
+사장님 화면 전체, 손님 화면 나머지(C-08 빵 상세, C-10 비밀번호 변경, C-11 예약 제한 안내, C-05 예정·지난 예약 탭), A-03 수량 복사, A-05 대시보드 실시간·픽업 준비 목록 인쇄, A-11 판매 통계, 탈퇴, 사진 WEBP 변환, 오래된 데이터 아카이브. (대시보드 경고·업무 지표, 아웃박스 dead letter, 장애 실험은 2차에서 완료) 전체 목록과 근거는 decisions.md 4장 "2차로 미룸"에 있습니다.
