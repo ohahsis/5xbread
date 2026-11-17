@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router'
 import { ApiError } from './api/problem'
 import { SessionRestorer } from './auth/auth'
+import { BreadListPage } from './pages/BreadListPage'
 import { Layout } from './pages/Layout'
 import { LoginPage } from './pages/LoginPage'
 import { SignupPage } from './pages/SignupPage'
@@ -23,7 +24,7 @@ const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { index: true, element: <Navigate to="/breads" replace /> },
-      { path: 'breads', element: <p className="page-message">빵 목록 (다음 커밋)</p> },
+      { path: 'breads', element: <BreadListPage /> },
       { path: 'login', element: <LoginPage /> },
       { path: 'signup', element: <SignupPage /> },
       { path: '*', element: <p className="page-message">없는 화면입니다</p> },
