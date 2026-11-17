@@ -121,10 +121,10 @@ Vite 개발 서버가 `/api`와 `/ws`를 `localhost:8080`으로 넘깁니다(`vi
 
 | 화면 | |
 |---|---|
-| 빵 목록 + 실시간 잔여 | _(스크린샷 자리: `docs/images/frontend-breads.png`)_ |
-| 예약 실패: 빵별 재고 부족 (409 `errors[]`) | _(스크린샷 자리: `docs/images/frontend-out-of-stock.png`)_ |
-| 예약 상세 + 픽업 QR + 취소 마감 안내 | _(스크린샷 자리: `docs/images/frontend-detail-qr.png`)_ |
-| 내 예약 목록 | _(스크린샷 자리: `docs/images/frontend-my-reservations.png`)_ |
+| 빵 목록 + 실시간 잔여 (비로그인) | <img src="docs/images/frontend-breads.png" width="420"> |
+| 예약 실패: 빵별 재고 부족 (409 `errors[]`) | <img src="docs/images/frontend-out-of-stock.png" width="420"> |
+| 예약 상세 + 픽업 QR + 취소 마감 안내 | <img src="docs/images/frontend-detail-qr.png" width="420"> |
+| 내 예약 목록 | <img src="docs/images/frontend-my-reservations.png" width="420"> |
 
 ## 측정값 (1차 마무리, 2026-11-16, main `3849e0b`)
 
