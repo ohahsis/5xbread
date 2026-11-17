@@ -126,7 +126,7 @@ v1은 **재고·한도 검사를 DB로** 하는 방식(`RESERVATION_MODE=db-only
 | MySQL 재시작 (`restart`) | 재시작 순간 약 1초 동안 503 30건, 그 뒤 약 3초는 기다렸다가 성공(최대 4.3초) | restart가 끝나기 전에 오류 0 | 초과 예약 0, Redis = DB, 미발행 0, dead 0 |
 
 - 실험에서 찾아 고친 것: MySQL 연결 장애가 500 `INTERNAL_ERROR`로 나가던 것을 Redis 장애와 같은 503으로 바꿨습니다
-- 응답만 멈춘 Redis(`pause`)는 클라이언트에서 시간 초과로 끝난 명령을 재개 뒤 그대로 실행합니다. 아웃박스는 멱등이라 영향이 없고, 남는 한계는 decisions.md 6장 "장애 실험"에 있습니다
+- 응답만 멈춘 Redis(`pause`)는 클라이언트에서 시간 초과로 끝난 명령을 재개 뒤 그대로 실행합니다. 아웃박스는 멱등이라 영향이 없습니다. 같은 일로 Idempotency 처리 중 표시가 남아 같은 키가 24시간 409가 될 수 있던 것은 표시를 2분만 두도록 고쳤습니다(decisions.md 6장 "Idempotency 처리 중 TTL")
 - 아웃박스는 처리 실패를 `attempts`로 세고 10번째에 dead로 표시해 더 집지 않습니다. 그 재고는 N-05 정합성 점검이 맞춥니다(decisions.md 6장 "아웃박스 실패 한도")
 - 방법·초별 값·예상과 달랐던 것: [`docs/measurements/2026-11-17-chaos.md`](docs/measurements/2026-11-17-chaos.md)
 

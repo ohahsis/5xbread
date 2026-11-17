@@ -54,7 +54,8 @@ fivexbread:
     daily-limit-per-member: 3     # 부록 B: 판매일별 1인 최대 예약 건수
     max-total-quantity: 20        # Q-07: 예약 1건 최대 총수량
     rate-limit-per-second: 5      # N-23: 회원당 초당 예약 요청
-    idempotency-ttl: 24h          # N-06: Idempotency 결과 보관
+    idempotency-ttl: 24h          # N-06: Idempotency 결과(성공 201) 보관
+    idempotency-processing-ttl: 2m   # 처리 중 표시 보관. 요청 처리 상한(Hikari 대기 30초 + 쿼리)보다 길게. 남은 표시가 하루 동안 409 를 내지 않도록
     mode: ${RESERVATION_MODE:redis}   # redis(v2, 운영) | db-only(v1, 재고·한도 검사를 DB로. 비교 측정용, docker·test 프로필에서만)
   catalog-cache:
     ttl: 30s                      # 부록 B: 빵 정보 로컬 캐시. 무효화 메시지가 유실돼도 이 시간 뒤에는 맞는다

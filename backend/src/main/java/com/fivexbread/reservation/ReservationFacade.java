@@ -108,7 +108,8 @@ public class ReservationFacade {
 
     /**
      * 커밋 후 처리를 모으는 곳. 잔여 변경 발행(C-03)은 여기가 아니라 차감 Lua 안에서 한다.
-     * 예약은 이미 저장됐으므로 여기서 실패해도 201 을 돌려준다. 같은 키 재요청은 처리 중(409)으로 보이다가 24시간 뒤 풀린다.
+     * 예약은 이미 저장됐으므로 여기서 실패해도 201 을 돌려준다. 같은 키 재요청은 처리 중 표시가 만료될 때까지(기본 2분) 409,
+     * 그 뒤에는 DB UNIQUE 에 걸려 Redis 차감을 되돌리고 422 IDEMPOTENCY_KEY_MISMATCH 다(예약은 1건 그대로).
      */
     private void afterCommit(String idempotencyKey, String fingerprint, String location, ReservationResponse response) {
         try {
