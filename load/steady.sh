@@ -7,7 +7,9 @@
 #
 # 1) seed-steady.sql 로 손님 10,000명·판매일 5개(20일 뒤부터)·재고를 다시 넣고 그 날들의 Redis 재고 키를 지운다
 # 2) 토큰이 없거나 20분 넘었으면 login.js 로 다시 로그인 (TOKENS_DIR 을 주면 그 폴더를 재사용, 아니면 임시 폴더를 만들고 끝나면 지움)
-# 3) steady.js. OUT_DIR·NAME 을 주면 k6 summary JSON 을 OUT_DIR/NAME.json 으로 남긴다
+# 3) steady.js. OUT_DIR·NAME 을 주면 k6 summary JSON 을 OUT_DIR/NAME.json 으로 남긴다.
+#    K6_CSV=1 이면 요청마다의 결과도 OUT_DIR/NAME.csv 로 남긴다(chaos.sh 가 초 단위 응답 코드를 읽는다).
+#    CANCEL_RATIO·TRACK_UPSTREAM 은 steady.js 로 그대로 넘긴다
 # 4) 판정(하나라도 틀리면 exit 1): 판매일·빵마다 reserved_qty = 예약 수량 합 ≤ reservable_qty,
 #    RESERVATION_MODE 가 db-only 가 아니면 hot 행의 Redis 잔여 = DB 잔여. 5xx·dropped 는 결과로만 보여 준다(무너지는 지점을 찾는 값)
 set -euo pipefail
@@ -66,10 +68,15 @@ OUT_ARGS=()
 if [[ -n "${OUT_DIR:-}" ]]; then
   OUT_ARGS=(-v "$OUT_DIR:/out" -e OUT_FILE="/out/${NAME:-steady-$SCENARIO}.json")
 fi
+CSV_ARGS=()
+if [[ "${K6_CSV:-0}" == 1 && -n "${OUT_DIR:-}" ]]; then
+  CSV_ARGS=(--out "csv=/out/${NAME:-steady-$SCENARIO}.csv")
+fi
 echo "일정 부하 $SCENARIO 초당 $RATE 건 $DURATION (판매일 $FIRST_DATE 부터 5일)"
 K6_OUT=$("${COMPOSE[@]}" run --rm --no-deps --quiet-pull -v "$TOKENS_DIR:/work:ro" ${OUT_ARGS[@]+"${OUT_ARGS[@]}"} \
   -e SCENARIO="$SCENARIO" -e RATE="$RATE" -e DURATION="$DURATION" -e USERS="$USERS" -e TARGETS="$TARGETS" \
-  k6 run --quiet /load/steady.js 2>&1 | grep -v -E "^ ?Container " || true)
+  -e CANCEL_RATIO="${CANCEL_RATIO:-0}" -e TRACK_UPSTREAM="${TRACK_UPSTREAM:-0}" \
+  k6 run --quiet ${CSV_ARGS[@]+"${CSV_ARGS[@]}"} /load/steady.js 2>&1 | grep -v -E "^ ?Container " || true)
 echo "$K6_OUT" | grep '^RESULT ' || { echo "$K6_OUT" | tail -20; echo "k6 결과 없음" >&2; exit 1; }
 
 echo
