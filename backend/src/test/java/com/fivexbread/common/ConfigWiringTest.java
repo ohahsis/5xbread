@@ -47,10 +47,10 @@ class ConfigWiringTest extends IntegrationTestSupport {
     }
 
     @Test
-    void 커넥션의_락_대기는_5초이고_Hikari_대기는_3초다() throws Exception {
+    void 커넥션의_락_대기는_5초이고_Hikari_대기는_10초다() throws Exception {
         // 테스트 컨테이너 URL 에도 같은 값을 넣었으므로(IntegrationTestSupport) 실제 커넥션의 세션 값으로 확인한다
         assertThat(jdbcTemplate.queryForObject("SELECT @@SESSION.innodb_lock_wait_timeout", Integer.class)).isEqualTo(5);
-        assertThat(dataSource.unwrap(HikariDataSource.class).getConnectionTimeout()).isEqualTo(3000);
+        assertThat(dataSource.unwrap(HikariDataSource.class).getConnectionTimeout()).isEqualTo(10_000);
     }
 
     @Test

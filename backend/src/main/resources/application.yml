@@ -18,7 +18,9 @@ spring:
     username: ${DB_USERNAME:fivexbread}
     password: ${DB_PASSWORD:}
     hikari:
-      connection-timeout: 3000    # ms(Hikari 는 Duration 이 아니라 숫자). 풀에서 커넥션을 기다리는 시간(기본 30초). DB 장애·풀 고갈 때 요청이 30초씩 멈추지 않게
+      # ms(Hikari 는 Duration 이 아니라 숫자). 풀에서 커넥션을 기다리는 시간(기본 30초). DB 장애 때 요청이 30초씩 멈추지 않게 줄이되,
+      # 3초는 동시 예약 1,000건(load/run.sh)에서 풀 대기가 3초를 넘어 503 36건이 났다(30초일 때 예약 응답 최대 약 5.4초) → 10초 (decisions.md 6장 "DB 시간 제한")
+      connection-timeout: 10000
   jpa:
     open-in-view: false
     hibernate:
@@ -80,7 +82,7 @@ fivexbread:
     max-total-quantity: 20        # Q-07: 예약 1건 최대 총수량
     rate-limit-per-second: 5      # N-23: 회원당 초당 예약 요청
     idempotency-ttl: 24h          # N-06: Idempotency 결과(성공 201) 보관
-    idempotency-processing-ttl: 2m   # 처리 중 표시 보관. 요청 처리 상한(Hikari 대기 3초 + 쿼리 10초)보다 길게. 남은 표시가 하루 동안 409 를 내지 않도록
+    idempotency-processing-ttl: 2m   # 처리 중 표시 보관. 요청 처리 상한(Hikari 대기 10초 + 쿼리 10초)보다 길게. 남은 표시가 하루 동안 409 를 내지 않도록
     mode: ${RESERVATION_MODE:redis}   # redis(v2, 운영) | db-only(v1, 재고·한도 검사를 DB로. 비교 측정용, docker·test 프로필에서만)
   catalog-cache:
     ttl: 30s                      # 부록 B: 빵 정보 로컬 캐시. 무효화 메시지가 유실돼도 이 시간 뒤에는 맞는다
