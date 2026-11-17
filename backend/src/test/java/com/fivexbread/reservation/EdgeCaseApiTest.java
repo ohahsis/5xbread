@@ -218,7 +218,7 @@ class EdgeCaseApiTest extends IntegrationTestSupport {
     }
 
     @Test
-    void E12_Redis_차감_뒤_DB_저장이_실패하면_Redis를_되돌리고_500이며_같은_키로_다시_시도할_수_있다() {
+    void E12_Redis_차감_뒤_DB_연결이_끊겨_저장이_실패하면_Redis를_되돌리고_503이며_같은_키로_다시_시도할_수_있다() {
         long member = data.memberId();
         UUID key = UUID.randomUUID();
         doThrow(new DataAccessResourceFailureException("DB 연결 끊김")).doCallRealMethod().when(txService)
@@ -226,8 +226,8 @@ class EdgeCaseApiTest extends IntegrationTestSupport {
 
         ResponseEntity<JsonNode> failed = post(member, key, Map.of(3L, 2, 2L, 1));
 
-        assertThat(failed.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-        assertThat(failed.getBody().get("code").asText()).isEqualTo("INTERNAL_ERROR");
+        assertThat(failed.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);   // 저장소 연결 장애 (장애 실험)
+        assertThat(failed.getBody().get("code").asText()).isEqualTo("SERVICE_UNAVAILABLE");
         assertThat(redisStock(3)).isEqualTo(5);                   // 차감했던 만큼 보상
         assertThat(redisStock(2)).isEqualTo(50);
         assertThat(userQty(member, "3")).isEqualTo("0");
