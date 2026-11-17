@@ -1,7 +1,7 @@
 # 5XBread
 
 빵 예약 서비스 백엔드. 초과 예약 0건(Redis Lua + DB 조건부 UPDATE)과
-앱 3개 분산 환경이 핵심. 프론트는 이 저장소 범위 밖(나중에 별도 작업).
+앱 3개 분산 환경이 핵심. 손님 화면 최소 버전이 frontend/에 있다(React + Vite, 사장님 화면은 아직 없음).
 
 ## 기준 문서
 - 요구사항: docs/requirements.pdf (장 번호로 참조. 예: 13-1 = 예약하기)
@@ -16,6 +16,8 @@ Spring Security + JWT, STOMP WebSocket, Testcontainers
 - 인프라: `docker compose up -d` (루트)
 - 빌드·테스트: `cd backend && ./gradlew build`
 - 앱 실행: `./gradlew bootRun --args='--spring.profiles.active=local'`
+- 화면(Node 22): `cd frontend && npm ci && npm run dev` / 테스트 `npm test` / 빌드 `npm run build`
+- API 응답·요청을 바꾸면 `frontend/src/api/schema.d.ts`를 `npm run gen:api`로 다시 만든다 (README "API 타입 다시 만들기")
 
 ## 구조 (정의서 14장)
 - 도메인별 패키지: common, auth, member, catalog, saledate, reservation, realtime, admin, batch
