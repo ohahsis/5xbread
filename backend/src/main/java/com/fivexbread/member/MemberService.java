@@ -1,9 +1,11 @@
 package com.fivexbread.member;
 
 import com.fivexbread.common.BusinessException;
+import com.fivexbread.common.ClockConfig;
 import com.fivexbread.common.ErrorCode;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -16,6 +18,7 @@ public class MemberService {
     private final MemberRepository memberRepository;
     private final MemberAgreementRepository agreementRepository;
     private final SignupProperties properties;
+    private final WithdrawalProperties withdrawalProperties;
     private final Clock clock;
 
     /**
@@ -36,6 +39,23 @@ public class MemberService {
         return member;
     }
 
+    /**
+     * 같은 번호로 탈퇴한 지 재가입 제한 기간(기본 30일)이 지나지 않았으면 422 (AU-07). 정확히 그 시각부터 가입할 수 있다.
+     * 가입 트랜잭션 전에 본다. BCrypt 를 계산하기 전에 거르려는 것이고, 같은 번호의 가입·탈퇴가 동시에 겹치는 경우까지 막지는 않는다
+     */
+    @Transactional(readOnly = true)
+    public void checkRejoin(String phoneHash) {
+        LocalDateTime withdrawnAt = memberRepository.findLastWithdrawnAt(phoneHash);
+        if (withdrawnAt == null) {
+            return;
+        }
+        LocalDateTime availableAt = withdrawnAt.plus(withdrawalProperties.rejoinAfter());
+        if (LocalDateTime.now(clock).isBefore(availableAt)) {
+            throw new BusinessException(ErrorCode.REJOIN_RESTRICTED, null,
+                    Map.of("rejoinAvailableAt", availableAt.atZone(ClockConfig.KST).toOffsetDateTime()));
+        }
+    }
+
     @Transactional(readOnly = true)
     public Optional<Member> findByPhone(String phone) {
         return memberRepository.findByPhone(phone);
@@ -49,6 +69,30 @@ public class MemberService {
     @Transactional(readOnly = true)
     public boolean existsAdmin() {
         return memberRepository.existsByRole(Role.ADMIN);
+    }
+
+    /** 내 정보 (C-10). 탈퇴한 회원이 남은 Access Token 으로 오면 401 */
+    @Transactional(readOnly = true)
+    public MyInfoResponse myInfo(long memberId) {
+        return MyInfoResponse.from(activeMember(memberId));
+    }
+
+    /**
+     * 이름 수정 (C-10). 활성 회원만 바꾸는 조건부 UPDATE 라 탈퇴(AU-07)와 겹쳐도 탈퇴회원 이름을 덮어쓰지 않는다.
+     * Access Token 에 이름이 없어 토큰을 다시 줄 필요가 없다.
+     */
+    @Transactional
+    public MyInfoResponse rename(long memberId, String name) {
+        if (memberRepository.rename(memberId, name) == 0) {
+            throw new BusinessException(ErrorCode.UNAUTHENTICATED);
+        }
+        return MyInfoResponse.from(activeMember(memberId));     // UPDATE 전에 읽어 둔 엔티티가 없어 바뀐 이름이 읽힌다
+    }
+
+    private Member activeMember(long memberId) {
+        return memberRepository.findById(memberId)
+                .filter(member -> member.getStatus() == MemberStatus.ACTIVE)
+                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHENTICATED));
     }
 
     /** @return 저장했는지. false 면 currentHash 를 읽은 뒤 다른 요청이 비밀번호를 바꾼 것 */

@@ -4,6 +4,9 @@ fivexbread:
     secret: test-only-jwt-secret-0123456789abcdef0123456789
   pickup:
     secret: test-only-pickup-secret-0123456789abcdef012345
+  withdrawal:
+    phone-hash-secret: test-only-withdrawn-phone-secret-0123456789ab
+    cleanup-cron: "-"             # 테스트는 메서드를 직접 호출한다
   catalog-cache:
     ttl: 0s                       # DB 를 직접 바꾸는 테스트가 많아 기본은 캐시 없음. 캐시 동작은 SaleBreadsCacheApiTest 가 30초로 본다
   no-show:

@@ -1,5 +1,6 @@
 package com.fivexbread.saledate;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -17,7 +18,7 @@ public record StockReconciliationResponse(long reconciliationId, LocalDate saleD
      * @param dbRemaining DB 기준 잔여 = reservable_qty − reserved_qty
      * @param adjustment  더한 양(ADJUSTED 만 0 이 아님)
      */
-    public record Item(long breadId, Integer redisBefore, int dbRemaining, int adjustment, Result result) {
+    public record Item(long breadId, @Schema(nullable = true) Integer redisBefore, int dbRemaining, int adjustment, Result result) {
     }
 
     public enum Result {

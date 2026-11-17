@@ -15,6 +15,10 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 
     boolean existsByRole(Role role);
 
+    /** 그 번호 해시로 가장 최근에 탈퇴한 시각 (AU-07 재가입 제한). ix_member_withdrawn_phone. 없으면 null */
+    @Query(value = "SELECT MAX(withdrawn_at) FROM member WHERE withdrawn_phone_hash = :phoneHash", nativeQuery = true)
+    LocalDateTime findLastWithdrawnAt(@Param("phoneHash") String phoneHash);
+
     boolean existsByPhone(String phone);
 
     /**
@@ -27,6 +31,14 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
             WHERE m.id = :id AND m.passwordHash = :currentHash
             """)
     int changePassword(@Param("id") long id, @Param("currentHash") String currentHash, @Param("newHash") String newHash);
+
+    /** 이름 수정 (C-10). 읽은 뒤 탈퇴했으면 0행 */
+    @Modifying
+    @Query("""
+            UPDATE Member m SET m.name = :name
+            WHERE m.id = :id AND m.status = com.fivexbread.member.MemberStatus.ACTIVE
+            """)
+    int rename(@Param("id") long id, @Param("name") String name);
 
     /** 임시 비밀번호 저장 (A-09). 읽은 뒤 탈퇴했으면 0행 */
     @Modifying

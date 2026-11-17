@@ -1,5 +1,6 @@
 package com.fivexbread.saledate;
 
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.time.LocalDate;
@@ -22,6 +23,8 @@ public class AdminSaleDateController {
     private final SaleDateService saleDateService;
 
     @PutMapping("/{date}")
+    @ApiResponse(responseCode = "200", description = "있던 판매일을 바꿈")
+    @ApiResponse(responseCode = "201", description = "판매일을 새로 만듦")
     public ResponseEntity<SaleDateResponse> put(@PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
                                                 @Valid @RequestBody SaleDateRequest request) {
         SaleDateService.Result result = saleDateService.put(date, request);

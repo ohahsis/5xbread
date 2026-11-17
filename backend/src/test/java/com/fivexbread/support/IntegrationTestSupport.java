@@ -9,6 +9,8 @@ import org.testcontainers.containers.MySQLContainer;
 /**
  * MySQL·Redis 컨테이너를 테스트 JVM 하나에서 한 번만 띄워 모든 통합 테스트가 같이 쓴다.
  * MySQL은 compose.yaml과 같은 문자셋·타임존(+09:00)으로 띄운다 (decisions.md 3장).
+ * 연결 수 상한은 기본 151 에서 올린다. 설정(@Import·@MockitoBean)이 다른 테스트마다 스프링 컨텍스트가 따로 캐시되고
+ * 각자 Hikari 풀(10개)을 쥐고 있어, 컨텍스트가 15개를 넘으면 새 컨텍스트가 Flyway 연결부터 얻지 못한다.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -18,7 +20,8 @@ public abstract class IntegrationTestSupport {
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
             .withCommand("--character-set-server=utf8mb4",
                     "--collation-server=utf8mb4_0900_ai_ci",
-                    "--default-time-zone=+09:00");
+                    "--default-time-zone=+09:00",
+                    "--max-connections=500");
 
     @ServiceConnection(name = "redis")
     static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7").withExposedPorts(6379);

@@ -1,5 +1,6 @@
 package com.fivexbread.auth;
 
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
 import jakarta.validation.Valid;
@@ -24,6 +25,7 @@ public class AuthController {
 
     /** 로그인 = 토큰 자원 생성 (5장 인증 API). 201 Access Token + Refresh 쿠키. 401 번호·비밀번호 불일치, 423 잠김 */
     @PostMapping
+    @ApiResponse(responseCode = "201", description = "로그인함. Refresh Token 은 Set-Cookie(HttpOnly)로만")
     public ResponseEntity<AccessTokenResponse> login(@Valid @RequestBody LoginRequest request) {
         IssuedTokens tokens = authFacade.login(request);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -52,6 +54,7 @@ public class AuthController {
      * 쿠키가 없거나 이미 지워진 토큰이어도 결과(로그아웃된 상태)가 같으므로 204 (멱등)
      */
     @DeleteMapping("/current")
+    @ApiResponse(responseCode = "204", description = "로그아웃함. 쿠키 만료")
     public ResponseEntity<Void> logout(
             @CookieValue(name = RefreshTokenCookie.NAME, required = false) String refreshToken) {
         if (refreshToken != null && !refreshToken.isBlank()) {

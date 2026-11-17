@@ -1,5 +1,6 @@
 package com.fivexbread.saledate;
 
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import com.fivexbread.auth.AuthMember;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ public class AdminStockReconciliationController {
     private final StockReconciliationFacade reconciliationFacade;
 
     @PostMapping
+    @ApiResponse(responseCode = "201", description = "재계산함")
     public ResponseEntity<StockReconciliationResponse> create(
             @AuthenticationPrincipal AuthMember admin,
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {

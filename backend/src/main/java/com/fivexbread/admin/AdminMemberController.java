@@ -1,5 +1,7 @@
 package com.fivexbread.admin;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Content;
 import com.fivexbread.auth.AuthMember;
 import com.fivexbread.member.Member;
 import com.fivexbread.member.MemberService;
@@ -50,6 +52,7 @@ public class AdminMemberController {
     /** 노쇼 제한 해제 (A-10, R-17). 제한이 없어도 결과가 같으므로 200 */
     @PatchMapping(value = "/{memberId}", consumes = ReservationController.MERGE_PATCH_JSON)
     public AdminMemberResponse patch(@AuthenticationPrincipal AuthMember admin, @PathVariable long memberId,
+                                     @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(mediaType = ReservationController.MERGE_PATCH_JSON, schema = @Schema(implementation = MemberPatchBody.class)))
                                      @RequestBody Map<String, Object> body) {
         MemberPatch.requireBlockClear(body);
         return reservationBlockService.clear(admin.memberId(), memberId);

@@ -1,5 +1,6 @@
 package com.fivexbread.reservation;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import static com.fivexbread.reservation.ReservationResponse.toOffset;
 
 import com.fivexbread.reservation.ReservationResponse.ItemResponse;
@@ -17,7 +18,7 @@ public record ReservationDetailResponse(
         OffsetDateTime pickupAt,
         OffsetDateTime cancelDeadline,
         boolean cancelable,
-        OffsetDateTime canceledAt,
+        @Schema(nullable = true) OffsetDateTime canceledAt,
         List<ItemResponse> items,
         int totalPrice
 ) {

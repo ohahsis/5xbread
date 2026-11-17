@@ -1,5 +1,6 @@
 package com.fivexbread.catalog;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Set;
 
 public record BreadResponse(
@@ -7,7 +8,7 @@ public record BreadResponse(
         String name,
         BreadCategory category,
         int price,
-        String description,
+        @Schema(nullable = true) String description,
         Set<Allergen> allergens,
         int displayOrder,
         boolean active
