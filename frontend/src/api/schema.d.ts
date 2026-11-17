@@ -196,6 +196,22 @@ export interface paths {
         patch: operations["patch"];
         trace?: never;
     };
+    "/api/v1/members/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["me"];
+        put?: never;
+        post?: never;
+        delete: operations["withdraw"];
+        options?: never;
+        head?: never;
+        patch: operations["patch_1"];
+        trace?: never;
+    };
     "/api/v1/admin/reservations/{reservationId}": {
         parameters: {
             query?: never;
@@ -203,13 +219,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["detail_1"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        patch: operations["patch_1"];
+        patch: operations["patch_2"];
         trace?: never;
     };
     "/api/v1/admin/members/{memberId}": {
@@ -225,7 +241,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch: operations["patch_2"];
+        patch: operations["patch_3"];
         trace?: never;
     };
     "/api/v1/admin/breads/{breadId}": {
@@ -340,6 +356,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/sale-dates/{saleDate}/reservations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_3"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sale-dates/{saleDate}/pickup-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["pickupSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/reservations": {
         parameters: {
             query?: never;
@@ -427,7 +475,7 @@ export interface components {
             /** Format: int32 */
             reservedQty: number;
             /** Format: int32 */
-            perUserLimit: number;
+            perUserLimit: number | null;
         };
         StocksResponse: {
             /** Format: date */
@@ -446,6 +494,35 @@ export interface components {
             /** Format: int64 */
             pickupSlotId: number;
             items: components["schemas"]["Item"][];
+        };
+        ItemResponse: {
+            /** Format: int64 */
+            breadId: number;
+            name: string;
+            /** Format: int32 */
+            quantity: number;
+            /** Format: int32 */
+            unitPrice: number;
+        };
+        ReservationResponse: {
+            /** Format: int64 */
+            reservationId: number;
+            reservationNo: string;
+            /** @enum {string} */
+            status: "RESERVED" | "CANCELED" | "PICKED_UP" | "NO_SHOW";
+            /** Format: date */
+            saleDate: string;
+            /** Format: date-time */
+            pickupAt: string;
+            /** Format: date-time */
+            cancelDeadline: string;
+            /** Format: date-time */
+            canceledAt: string | null;
+            /** Format: date-time */
+            pickedUpAt: string | null;
+            items: components["schemas"]["ItemResponse"][];
+            /** Format: int32 */
+            totalPrice: number;
         };
         Agreements: {
             terms: boolean;
@@ -487,22 +564,15 @@ export interface components {
             status: "RESERVED" | "CANCELED" | "PICKED_UP" | "NO_SHOW";
             /** Format: date */
             saleDate: string;
+            /** Format: int64 */
+            pickupSlotId: number;
             /** Format: date-time */
             pickupAt: string;
-            memberName: string;
-            phone: string;
+            memberName: string | null;
+            phone: string | null;
             items: components["schemas"]["ItemResponse"][];
             /** Format: int32 */
             totalPrice: number;
-        };
-        ItemResponse: {
-            /** Format: int64 */
-            breadId: number;
-            name: string;
-            /** Format: int32 */
-            quantity: number;
-            /** Format: int32 */
-            unitPrice: number;
         };
         TemporaryPasswordResponse: {
             temporaryPassword: string;
@@ -526,31 +596,46 @@ export interface components {
             category: "BUTTER_ROLL" | "PASTRY" | "BAGEL" | "HARD_BREAD" | "LOAF" | "SWEET_BUN" | "SAVORY" | "DONUT" | "BAKED_SWEET";
             /** Format: int32 */
             price: number;
-            description: string;
+            description: string | null;
             allergens: ("EGG" | "MILK" | "BUCKWHEAT" | "PEANUT" | "SOYBEAN" | "WHEAT" | "MACKEREL" | "CRAB" | "SHRIMP" | "PORK" | "PEACH" | "TOMATO" | "SULFITE" | "WALNUT" | "CHICKEN" | "BEEF" | "SQUID" | "SHELLFISH" | "PINE_NUT")[];
             /** Format: int32 */
             displayOrder: number;
             active: boolean;
         };
-        ReservationResponse: {
-            /** Format: int64 */
-            reservationId: number;
-            reservationNo: string;
+        /** @description 손님 취소 (C-06). 이 필드만 받는다 */
+        ReservationCancelPatch: {
             /** @enum {string} */
-            status: "RESERVED" | "CANCELED" | "PICKED_UP" | "NO_SHOW";
+            status: "CANCELED";
+        };
+        /** @description 이름 수정. 이 필드만 받는다 */
+        MyInfoPatch: {
+            /** @description 한글 완성형·영문, 단어 사이 공백 하나. 앞뒤 공백은 지운 뒤 센다 */
+            name: string;
+        };
+        MyInfoResponse: {
+            /** Format: int64 */
+            memberId: number;
+            name: string;
+            phone: string;
+            /** @enum {string} */
+            role: "CUSTOMER" | "ADMIN";
             /** Format: date */
-            saleDate: string;
-            /** Format: date-time */
-            pickupAt: string;
-            /** Format: date-time */
-            cancelDeadline: string;
-            /** Format: date-time */
-            canceledAt: string;
-            /** Format: date-time */
-            pickedUpAt: string;
-            items: components["schemas"]["ItemResponse"][];
-            /** Format: int32 */
-            totalPrice: number;
+            reservationBlockedUntil: string | null;
+        };
+        /** @description 직권 취소(A-08) 또는 수령(A-06). 이 필드만 받는다 */
+        AdminReservationPatch: {
+            /** @enum {string} */
+            status: "CANCELED" | "PICKED_UP";
+            /** @description CANCELED 일 때 필수, 앞뒤 공백을 뺀 5~100자. PICKED_UP 이면 보내지 않는다 */
+            cancelReason?: string;
+        };
+        /** @description 노쇼 예약 제한 해제. 이 필드만 받는다 */
+        AdminMemberPatch: {
+            /**
+             * Format: date
+             * @description null 만 허용(해제)
+             */
+            reservationBlockedUntil: string | null;
         };
         AdminMemberResponse: {
             /** Format: int64 */
@@ -558,7 +643,7 @@ export interface components {
             name: string;
             phone: string;
             /** Format: date */
-            reservationBlockedUntil: string;
+            reservationBlockedUntil: string | null;
         };
         BreadUpdateRequest: {
             name: string;
@@ -597,9 +682,9 @@ export interface components {
             /** Format: int32 */
             remaining: number;
             /** Format: int32 */
-            perUserLimit: number;
+            perUserLimit: number | null;
             /** Format: int32 */
-            myReservedQty: number;
+            myReservedQty: number | null;
             /** @enum {string} */
             status: "AVAILABLE" | "SOLD_OUT" | "NOT_OPEN" | "CLOSED";
         };
@@ -626,7 +711,7 @@ export interface components {
             cancelDeadline: string;
             cancelable: boolean;
             /** Format: date-time */
-            canceledAt: string;
+            canceledAt: string | null;
             items: components["schemas"]["ItemResponse"][];
             /** Format: int32 */
             totalPrice: number;
@@ -638,8 +723,107 @@ export interface components {
         };
         ReservationListResponse: {
             items: components["schemas"]["ReservationDetailResponse"][];
-            nextCursor: string;
+            nextCursor: string | null;
             hasNext: boolean;
+        };
+        AdminReservationListResponse: {
+            items: components["schemas"]["AdminReservationResponse"][];
+            nextCursor: string | null;
+            hasNext: boolean;
+        };
+        BreadQuantityResponse: {
+            /** Format: int64 */
+            breadId: number;
+            name: string;
+            /** Format: int32 */
+            quantity: number;
+        };
+        PickupSummaryResponse: {
+            /** Format: date */
+            saleDate: string;
+            /** @enum {string} */
+            status: "RESERVED" | "CANCELED" | "PICKED_UP" | "NO_SHOW";
+            slots: components["schemas"]["SlotSummary"][];
+            totals: components["schemas"]["BreadQuantityResponse"][];
+        };
+        SlotSummary: {
+            /** Format: int64 */
+            pickupSlotId: number;
+            /** Format: date-time */
+            pickupAt: string;
+            /** Format: int32 */
+            reservationCount: number;
+            breads: components["schemas"]["BreadQuantityResponse"][];
+        };
+        AdminReservationDetailResponse: {
+            /** Format: int64 */
+            reservationId: number;
+            reservationNo: string;
+            /** @enum {string} */
+            status: "RESERVED" | "CANCELED" | "PICKED_UP" | "NO_SHOW";
+            /** Format: date */
+            saleDate: string;
+            /** Format: int64 */
+            pickupSlotId: number;
+            /** Format: date-time */
+            pickupAt: string;
+            /** Format: date-time */
+            cancelDeadline: string;
+            /** @description 손님 기준 취소 가능 여부(픽업 60분 전까지). 사장님 직권 취소에는 마감이 없다 */
+            cancelable: boolean;
+            /** Format: date-time */
+            canceledAt: string | null;
+            cancelReason: string | null;
+            /** Format: date-time */
+            pickedUpAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            items: components["schemas"]["ItemResponse"][];
+            /** Format: int32 */
+            totalPrice: number;
+            member: components["schemas"]["MemberSummary"];
+            history: components["schemas"]["HistoryResponse"][];
+        };
+        HistoryResponse: {
+            /** @enum {string|null} */
+            fromStatus: "RESERVED" | "CANCELED" | "PICKED_UP" | "NO_SHOW" | null;
+            /** @enum {string} */
+            toStatus: "RESERVED" | "CANCELED" | "PICKED_UP" | "NO_SHOW";
+            /** @enum {string} */
+            actorType: "CUSTOMER" | "ADMIN" | "SYSTEM";
+            /** Format: date-time */
+            changedAt: string;
+        };
+        MemberSummary: {
+            /** Format: int64 */
+            memberId: number;
+            name: string | null;
+            phone: string | null;
+            /** @enum {string} */
+            status: "ACTIVE" | "LOCKED" | "WITHDRAWN";
+        };
+        WithdrawalRequest: {
+            password: string;
+        };
+        /** @description RFC 9457 ProblemDetail. code 로 분기한다. 업무 예외에 따라 다른 속성이 더 붙을 수 있다 */
+        Problem: {
+            /** Format: uri */
+            type: string;
+            title: string;
+            /** Format: int32 */
+            status: number;
+            detail?: string | null;
+            /** Format: uri */
+            instance: string;
+            /** @enum {string} */
+            code: "INVALID_REQUEST" | "UNAUTHENTICATED" | "INVALID_CREDENTIALS" | "FORBIDDEN" | "PASSWORD_CHANGE_REQUIRED" | "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "OUT_OF_STOCK" | "PER_USER_LIMIT_EXCEEDED" | "INVALID_STATUS_TRANSITION" | "IDEMPOTENCY_IN_PROGRESS" | "DUPLICATE_PHONE" | "DUPLICATE_BREAD_NAME" | "ACTIVE_RESERVATION_EXISTS" | "RECONCILIATION_IN_PROGRESS" | "PRECONDITION_FAILED" | "PAYLOAD_TOO_LARGE" | "RESERVATION_NOT_OPEN" | "RESERVATION_CLOSED" | "CANCEL_DEADLINE_PASSED" | "RESERVATION_COUNT_EXCEEDED" | "TOTAL_QUANTITY_EXCEEDED" | "STOCK_BELOW_RESERVED" | "RESERVATION_BLOCKED" | "ACTIVE_BREAD_LIMIT_EXCEEDED" | "INVALID_SALE_DATE" | "SALE_DATE_HOLIDAY" | "INVALID_STOCK_ROWS" | "INVALID_PICKUP_SLOT" | "BREAD_NOT_AVAILABLE" | "INVALID_CURRENT_PASSWORD" | "REJOIN_RESTRICTED" | "PASSWORD_CONTAINS_PHONE" | "PASSWORD_SAME_AS_CURRENT" | "IDEMPOTENCY_KEY_MISMATCH" | "PICKUP_DATE_MISMATCH" | "INVALID_PICKUP_CODE" | "ACCOUNT_LOCKED" | "IDEMPOTENCY_KEY_REQUIRED" | "PRECONDITION_REQUIRED" | "TOO_MANY_REQUESTS" | "INTERNAL_ERROR" | "SERVICE_UNAVAILABLE";
+            traceId: string;
+            /** @description 위반 항목 전부. 모양은 code 마다 다르다: INVALID_REQUEST {field, code, message}, OUT_OF_STOCK·PER_USER_LIMIT_EXCEEDED {breadId, reason, remaining}, BREAD_NOT_AVAILABLE {breadId}, INVALID_STOCK_ROWS {breadId, field, reason, reserved}, INVALID_SALE_DATE {field, reason, message} */
+            errors?: {
+                [key: string]: unknown;
+            }[];
+        } & {
+            [key: string]: unknown;
         };
     };
     responses: never;
@@ -669,7 +853,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["AccessTokenResponse"];
+                    "application/json": components["schemas"]["AccessTokenResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -691,7 +884,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["AccessTokenResponse"];
+                    "application/json": components["schemas"]["AccessTokenResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -707,12 +909,21 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
-            200: {
+            /** @description 로그아웃함. 쿠키 만료 */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
             };
         };
     };
@@ -731,13 +942,31 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description 있던 판매일을 바꿈 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["SaleDateResponse"];
+                    "application/json": components["schemas"]["SaleDateResponse"];
+                };
+            };
+            /** @description 판매일을 새로 만듦 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaleDateResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -759,7 +988,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["StocksResponse"];
+                    "application/json": components["schemas"]["StocksResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -787,7 +1025,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["StocksResponse"];
+                    "application/json": components["schemas"]["StocksResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -807,13 +1054,22 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description 예약함. 같은 Idempotency-Key 재요청도 처음과 같은 201 */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "application/json": components["schemas"]["ReservationResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -831,13 +1087,22 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description 가입함. Location: /api/v1/members/{id} */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["SignupResponse"];
+                    "application/json": components["schemas"]["SignupResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -855,13 +1120,22 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description 로그인함. Refresh Token 은 Set-Cookie(HttpOnly)로만 */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["AccessTokenResponse"];
+                    "application/json": components["schemas"]["AccessTokenResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -877,13 +1151,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
-            200: {
+            /** @description 재계산함 */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["StockReconciliationResponse"];
+                    "application/json": components["schemas"]["StockReconciliationResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -907,7 +1190,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["AdminReservationResponse"];
+                    "application/json": components["schemas"]["AdminReservationResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -929,7 +1221,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["TemporaryPasswordResponse"];
+                    "application/json": components["schemas"]["TemporaryPasswordResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -951,7 +1252,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["BreadResponse"][];
+                    "application/json": components["schemas"]["BreadResponse"][];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -969,13 +1279,22 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description 등록함. Location: /api/v1/admin/breads/{id} */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["BreadResponse"];
+                    "application/json": components["schemas"]["BreadResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -997,7 +1316,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ReservationDetailResponse"];
+                    "application/json": components["schemas"]["ReservationDetailResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -1013,9 +1341,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/merge-patch+json": {
-                    [key: string]: unknown;
-                };
+                "application/merge-patch+json": components["schemas"]["ReservationCancelPatch"];
             };
         };
         responses: {
@@ -1025,12 +1351,145 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ReservationResponse"];
+                    "application/json": components["schemas"]["ReservationResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyInfoResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    withdraw: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WithdrawalRequest"];
+            };
+        };
+        responses: {
+            /** @description 탈퇴함. 쿠키 만료 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
     };
     patch_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/merge-patch+json": components["schemas"]["MyInfoPatch"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyInfoResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    detail_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reservationId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminReservationDetailResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    patch_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -1041,9 +1500,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/merge-patch+json": {
-                    [key: string]: unknown;
-                };
+                "application/merge-patch+json": components["schemas"]["AdminReservationPatch"];
             };
         };
         responses: {
@@ -1053,12 +1510,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ReservationResponse"];
+                    "application/json": components["schemas"]["ReservationResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
     };
-    patch_2: {
+    patch_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -1069,9 +1535,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/merge-patch+json": {
-                    [key: string]: unknown;
-                };
+                "application/merge-patch+json": components["schemas"]["AdminMemberPatch"];
             };
         };
         responses: {
@@ -1081,7 +1545,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["AdminMemberResponse"];
+                    "application/json": components["schemas"]["AdminMemberResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -1107,7 +1580,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["BreadResponse"];
+                    "application/json": components["schemas"]["BreadResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -1130,7 +1612,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["SaleDateStatusResponse"][];
+                    "application/json": components["schemas"]["SaleDateStatusResponse"][];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -1152,7 +1643,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["SaleDateStatusResponse"];
+                    "application/json": components["schemas"]["SaleDateStatusResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -1174,7 +1674,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PickupSlotResponse"][];
+                    "application/json": components["schemas"]["PickupSlotResponse"][];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -1196,7 +1705,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["SaleBreadsResponse"];
+                    "application/json": components["schemas"]["SaleBreadsResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -1218,7 +1736,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PickupCodeResponse"];
+                    "application/json": components["schemas"]["PickupCodeResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -1242,7 +1769,85 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ReservationListResponse"];
+                    "application/json": components["schemas"]["ReservationListResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    list_3: {
+        parameters: {
+            query?: {
+                status?: "RESERVED" | "CANCELED" | "PICKED_UP" | "NO_SHOW";
+                pickupSlotId?: number;
+                cursor?: string;
+                size?: number;
+            };
+            header?: never;
+            path: {
+                saleDate: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminReservationListResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    pickupSummary: {
+        parameters: {
+            query?: {
+                status?: "RESERVED" | "CANCELED" | "PICKED_UP" | "NO_SHOW";
+            };
+            header?: never;
+            path: {
+                saleDate: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupSummaryResponse"];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -1267,7 +1872,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["AdminReservationResponse"][];
+                    "application/json": components["schemas"]["AdminReservationResponse"][];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -1289,7 +1903,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["AdminMemberResponse"][];
+                    "application/json": components["schemas"]["AdminMemberResponse"][];
+                };
+            };
+            /** @description 오류 (RFC 9457 ProblemDetail + code) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };

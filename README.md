@@ -115,7 +115,7 @@ Vite 개발 서버가 `/api`와 `/ws`를 `localhost:8080`으로 넘깁니다(`vi
    OPENAPI_URL=http://localhost/v3/api-docs npm run gen:api     # 앱 3개 환경에서
    ```
 3. 확인한다: `git diff src/api/schema.d.ts`로 바뀐 부분을 보고 `npm run build && npm test`. 응답 필드가 없어지거나 이름이 바뀌었으면 tsc가 쓰는 곳을 알려 준다
-4. 새로 null이 될 수 있는 응답 필드가 생겼으면 `src/api/types.ts`에 `| null`로 고쳐 적는다. springdoc은 응답 record 필드에 required를 붙이지 않아서, 생성할 때 `--properties-required-by-default`로 모두 필수로 만들고 null이 오는 필드만 직접 고친다(그 파일 위쪽 주석)
+4. null이 될 수 있는 응답 필드는 백엔드에서 `@Schema(nullable = true)`로 표시하면 생성 타입에 `| null`로 들어온다. `src/api/types.ts`에서 손으로 고치지 않는다. 생성할 때 붙이는 `--properties-required-by-default`는 그 파일 위쪽 주석 참고
 
 **스크린샷**
 
