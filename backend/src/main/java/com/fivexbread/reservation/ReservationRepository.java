@@ -98,7 +98,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
                                          @Param("to") LocalDate to, @Param("threshold") int threshold);
 
     /**
-     * 그날 손님의 예약 건수(취소 제외). Redis user_qty 의 건수 필드를 다시 채울 때의 기준으로만 쓴다 (decisions.md 6장).
+     * 그날 손님의 예약 건수(취소 제외). Redis user_qty 의 건수 필드를 다시 채울 때의 기준, 예약 트랜잭션의 하루 건수 검사(v1·v2)에 쓴다.
      * ix_resv_member_status (member_id, status, sale_date) 커버링.
      */
     @Query(value = """

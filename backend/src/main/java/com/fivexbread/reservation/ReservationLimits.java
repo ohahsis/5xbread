@@ -1,7 +1,8 @@
 package com.fivexbread.reservation;
 
 /**
- * 1인 한도 검사 (R-03·R-04). db-only(v1)에서 DB 합계로 판단할 때 쓴다. Redis 모드의 RESERVE Lua 와 같은 규칙·같은 errors[] 형식이다:
+ * 1인 한도·하루 건수 검사 (R-03·R-04). DB 합계로 판단할 때 쓴다: db-only(v1)의 유일한 검사, redis(v2)의 트랜잭션 안 재검사.
+ * RESERVE Lua 와 같은 규칙·같은 errors[] 형식이다:
  * 이미 예약한 수량 + 이번 수량이 한도를 넘으면 PER_USER_LIMIT_EXCEEDED, remaining 은 남은 한도(0 이상).
  */
 final class ReservationLimits {
