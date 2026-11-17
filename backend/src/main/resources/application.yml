@@ -84,6 +84,10 @@ fivexbread:
     send-time-limit: 10s          # 13-3 어필: 느린 클라이언트는 연결을 끊는다
     send-buffer-size-limit: 512KB
     listener-queue-capacity: 10000   # Redis 메시지 대기열. 차면 오래된 것부터 버린다(다음 메시지가 절대값이라 맞춰짐)
+  withdrawal:
+    phone-hash-secret: ${WITHDRAWN_PHONE_SECRET:}   # 탈퇴한 번호 HMAC 키 (AU-07). 저장소에 넣지 않음. 비어 있거나 32바이트 미만이면 앱이 뜨지 않음
+    rejoin-after: 30d             # AU-07, 부록 B: 같은 번호 재가입 제한. 지난 해시는 정리 작업이 지운다
+    cleanup-cron: ${WITHDRAWAL_CLEANUP_CRON:0 40 4 * * *}   # 매일 04:40 지난 번호 해시 정리. "-" 면 끈다
   signup:
     daily-limit-per-ip: 10        # AU-02, 부록 B
     terms-version: "v1"           # 서비스 이용약관

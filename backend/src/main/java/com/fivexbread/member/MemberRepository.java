@@ -15,6 +15,10 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 
     boolean existsByRole(Role role);
 
+    /** 그 번호 해시로 가장 최근에 탈퇴한 시각 (AU-07 재가입 제한). ix_member_withdrawn_phone. 없으면 null */
+    @Query(value = "SELECT MAX(withdrawn_at) FROM member WHERE withdrawn_phone_hash = :phoneHash", nativeQuery = true)
+    LocalDateTime findLastWithdrawnAt(@Param("phoneHash") String phoneHash);
+
     boolean existsByPhone(String phone);
 
     /**

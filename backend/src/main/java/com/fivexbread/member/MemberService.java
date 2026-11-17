@@ -1,9 +1,11 @@
 package com.fivexbread.member;
 
 import com.fivexbread.common.BusinessException;
+import com.fivexbread.common.ClockConfig;
 import com.fivexbread.common.ErrorCode;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -16,6 +18,7 @@ public class MemberService {
     private final MemberRepository memberRepository;
     private final MemberAgreementRepository agreementRepository;
     private final SignupProperties properties;
+    private final WithdrawalProperties withdrawalProperties;
     private final Clock clock;
 
     /**
@@ -34,6 +37,23 @@ public class MemberService {
         agreementRepository.save(new MemberAgreement(
                 member.getId(), properties.termsVersion(), properties.privacyVersion(), now));
         return member;
+    }
+
+    /**
+     * 같은 번호로 탈퇴한 지 재가입 제한 기간(기본 30일)이 지나지 않았으면 422 (AU-07). 정확히 그 시각부터 가입할 수 있다.
+     * 가입 트랜잭션 전에 본다. BCrypt 를 계산하기 전에 거르려는 것이고, 같은 번호의 가입·탈퇴가 동시에 겹치는 경우까지 막지는 않는다
+     */
+    @Transactional(readOnly = true)
+    public void checkRejoin(String phoneHash) {
+        LocalDateTime withdrawnAt = memberRepository.findLastWithdrawnAt(phoneHash);
+        if (withdrawnAt == null) {
+            return;
+        }
+        LocalDateTime availableAt = withdrawnAt.plus(withdrawalProperties.rejoinAfter());
+        if (LocalDateTime.now(clock).isBefore(availableAt)) {
+            throw new BusinessException(ErrorCode.REJOIN_RESTRICTED, null,
+                    Map.of("rejoinAvailableAt", availableAt.atZone(ClockConfig.KST).toOffsetDateTime()));
+        }
     }
 
     @Transactional(readOnly = true)

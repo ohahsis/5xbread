@@ -38,7 +38,7 @@ Java 21, Spring Boot 3.5.16, Gradle 8.14(Kotlin DSL), MySQL 8, Redis 7, Flyway, 
 
 ## 실행
 
-먼저 `cp .env.example .env` 후 필수 값(`DB_PASSWORD`, `DB_ROOT_PASSWORD`, `JWT_SECRET`, `PICKUP_SECRET`, 각 비밀 키는 32바이트 이상)과 사장님 초기 계정을 채웁니다. 선택 값은 `.env.example`의 주석을 보세요.
+먼저 `cp .env.example .env` 후 필수 값(`DB_PASSWORD`, `DB_ROOT_PASSWORD`, `JWT_SECRET`, `PICKUP_SECRET`, `WITHDRAWN_PHONE_SECRET`, 각 비밀 키는 32바이트 이상)과 사장님 초기 계정을 채웁니다. 선택 값은 `.env.example`의 주석을 보세요.
 
 ### 1. 로컬 (앱 1개)
 

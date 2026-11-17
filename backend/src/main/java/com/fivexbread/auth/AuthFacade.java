@@ -8,8 +8,11 @@ import com.fivexbread.member.MemberService;
 import com.fivexbread.member.MemberStatus;
 import com.fivexbread.member.PasswordRules;
 import com.fivexbread.member.Role;
+import com.fivexbread.member.WithdrawalService;
+import com.fivexbread.member.WithdrawnPhoneHasher;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +21,7 @@ import org.springframework.stereotype.Component;
  * → 성공이면 횟수·잠금 삭제(Redis) → Access Token(JWT) + Refresh Token(Redis) 발급.
  * Redis 호출과 BCrypt 는 트랜잭션 밖에서 한다.
  */
+@Slf4j
 @Component
 public class AuthFacade {
 
@@ -27,19 +31,24 @@ public class AuthFacade {
     private final JwtProvider jwtProvider;
     private final JwtProperties jwtProperties;
     private final RefreshTokenStore refreshTokenStore;
+    private final WithdrawalService withdrawalService;
+    private final WithdrawnPhoneHasher withdrawnPhoneHasher;
 
     /** 없는 번호일 때 비교할 해시. 같은 인코더(cost 10)로 만들어 실제 비교와 걸리는 시간이 같다 */
     private final String dummyHash;
 
     public AuthFacade(LoginFailureCounter loginFailureCounter, MemberService memberService,
                       PasswordEncoder passwordEncoder, JwtProvider jwtProvider, JwtProperties jwtProperties,
-                      RefreshTokenStore refreshTokenStore) {
+                      RefreshTokenStore refreshTokenStore, WithdrawalService withdrawalService,
+                      WithdrawnPhoneHasher withdrawnPhoneHasher) {
         this.loginFailureCounter = loginFailureCounter;
         this.memberService = memberService;
         this.passwordEncoder = passwordEncoder;
         this.jwtProvider = jwtProvider;
         this.jwtProperties = jwtProperties;
         this.refreshTokenStore = refreshTokenStore;
+        this.withdrawalService = withdrawalService;
+        this.withdrawnPhoneHasher = withdrawnPhoneHasher;
         this.dummyHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
@@ -115,6 +124,31 @@ public class AuthFacade {
         }
         refreshTokenStore.revokeAll(memberId);
         return tokens(memberId, member.getRole(), false, refreshTokenStore.issue(memberId));
+    }
+
+    /**
+     * 탈퇴 (AU-07, 13-5 5단계). 순서: 회원 확인 → 시도 횟수(Redis) → BCrypt 비교 → 번호 해시 → DB 트랜잭션(잠금·RESERVED 확인·익명화)
+     * → 커밋 후 Refresh Token 전부 폐기(Redis).
+     * 비밀번호 재확인은 비밀번호 변경과 같은 횟수·잠금을 쓴다. Access Token 을 가진 사람이 대입으로 탈퇴시키지 못하게.
+     * 폐기가 실패해도 204 다: 재발급(reissue)이 ACTIVE 회원만 통과시켜 남은 Refresh Token 은 401 이 된다.
+     * 남은 Access Token(최대 30분)은 막지 않는다. 예약·이름 수정·비밀번호 변경은 회원 상태를 보고 401 (decisions.md 6장 "AU-07 탈퇴")
+     *
+     * @throws BusinessException 사장님 403, 비밀번호 불일치 422, 잠김 423, RESERVED 예약 있음 409, 이미 탈퇴 401
+     */
+    public void withdraw(long memberId, String password) {
+        Member member = memberService.findById(memberId)
+                .filter(m -> m.getStatus() == MemberStatus.ACTIVE)
+                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHENTICATED));
+        if (member.getRole() != Role.CUSTOMER) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);       // 사장님 계정이 사라지면 매장 관리가 멈춘다
+        }
+        verifyCurrentPassword(member, password);
+        withdrawalService.withdraw(memberId, member.getPasswordHash(), withdrawnPhoneHasher.hash(member.getPhone()));
+        try {
+            refreshTokenStore.revokeAll(memberId);
+        } catch (RuntimeException e) {
+            log.warn("탈퇴 후 Refresh Token 폐기 실패. 재발급은 회원 상태로 막힌다 memberId={}", memberId, e);
+        }
     }
 
     private void verifyCurrentPassword(Member member, String currentPassword) {

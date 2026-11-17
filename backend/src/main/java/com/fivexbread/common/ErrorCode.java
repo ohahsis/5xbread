@@ -28,6 +28,7 @@ public enum ErrorCode {
     IDEMPOTENCY_IN_PROGRESS(HttpStatus.CONFLICT, "같은 요청을 처리하고 있습니다"),
     DUPLICATE_PHONE(HttpStatus.CONFLICT, "이미 가입한 휴대폰 번호입니다"),
     DUPLICATE_BREAD_NAME(HttpStatus.CONFLICT, "이미 같은 이름의 빵이 있습니다"),          // 판매 중인 빵끼리 (A-01)
+    ACTIVE_RESERVATION_EXISTS(HttpStatus.CONFLICT, "진행 중인 예약이 있어 탈퇴할 수 없습니다"),        // AU-07: RESERVED 가 있으면
     RECONCILIATION_IN_PROGRESS(HttpStatus.CONFLICT, "같은 판매일의 수량 재계산이 진행 중입니다. 잠시 후 다시 시도해 주세요"),  // A-12·N-05
 
     PRECONDITION_FAILED(HttpStatus.PRECONDITION_FAILED, "다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도해 주세요"),
@@ -46,7 +47,8 @@ public enum ErrorCode {
     INVALID_STOCK_ROWS(HttpStatus.UNPROCESSABLE_ENTITY, "수량 설정에 맞지 않는 행이 있습니다"),        // errors[]: 틀린 행 전부 (A-02)
     INVALID_PICKUP_SLOT(HttpStatus.UNPROCESSABLE_ENTITY, "이 판매일의 픽업 시간대가 아닙니다"),         // C-04, decisions.md 6장
     BREAD_NOT_AVAILABLE(HttpStatus.UNPROCESSABLE_ENTITY, "이 판매일에 예약할 수 없는 빵이 있습니다"),   // errors[]: breadId 전부 (C-04)
-    INVALID_CURRENT_PASSWORD(HttpStatus.UNPROCESSABLE_ENTITY, "현재 비밀번호가 틀렸습니다"),            // C-10
+    INVALID_CURRENT_PASSWORD(HttpStatus.UNPROCESSABLE_ENTITY, "현재 비밀번호가 틀렸습니다"),            // C-10, AU-07 탈퇴 재확인
+    REJOIN_RESTRICTED(HttpStatus.UNPROCESSABLE_ENTITY, "탈퇴한 번호는 일정 기간이 지나야 다시 가입할 수 있습니다"),   // AU-07: rejoinAvailableAt
     PASSWORD_CONTAINS_PHONE(HttpStatus.UNPROCESSABLE_ENTITY, "비밀번호에 휴대폰 번호를 포함할 수 없습니다"),       // C-10: 번호는 서버만 알아 형식 검증(400)이 아니다
     PASSWORD_SAME_AS_CURRENT(HttpStatus.UNPROCESSABLE_ENTITY, "현재 비밀번호와 다른 비밀번호를 입력해 주세요"),   // C-10
     IDEMPOTENCY_KEY_MISMATCH(HttpStatus.UNPROCESSABLE_ENTITY, "같은 Idempotency-Key 로 다른 요청을 보냈습니다"),   // N-06
