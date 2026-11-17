@@ -51,6 +51,30 @@ public class MemberService {
         return memberRepository.existsByRole(Role.ADMIN);
     }
 
+    /** 내 정보 (C-10). 탈퇴한 회원이 남은 Access Token 으로 오면 401 */
+    @Transactional(readOnly = true)
+    public MyInfoResponse myInfo(long memberId) {
+        return MyInfoResponse.from(activeMember(memberId));
+    }
+
+    /**
+     * 이름 수정 (C-10). 활성 회원만 바꾸는 조건부 UPDATE 라 탈퇴(AU-07)와 겹쳐도 탈퇴회원 이름을 덮어쓰지 않는다.
+     * Access Token 에 이름이 없어 토큰을 다시 줄 필요가 없다.
+     */
+    @Transactional
+    public MyInfoResponse rename(long memberId, String name) {
+        if (memberRepository.rename(memberId, name) == 0) {
+            throw new BusinessException(ErrorCode.UNAUTHENTICATED);
+        }
+        return MyInfoResponse.from(activeMember(memberId));     // UPDATE 전에 읽어 둔 엔티티가 없어 바뀐 이름이 읽힌다
+    }
+
+    private Member activeMember(long memberId) {
+        return memberRepository.findById(memberId)
+                .filter(member -> member.getStatus() == MemberStatus.ACTIVE)
+                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHENTICATED));
+    }
+
     /** @return 저장했는지. false 면 currentHash 를 읽은 뒤 다른 요청이 비밀번호를 바꾼 것 */
     @Transactional
     public boolean changePassword(long memberId, String currentHash, String newHash) {

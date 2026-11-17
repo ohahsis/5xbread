@@ -28,6 +28,14 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
             """)
     int changePassword(@Param("id") long id, @Param("currentHash") String currentHash, @Param("newHash") String newHash);
 
+    /** 이름 수정 (C-10). 읽은 뒤 탈퇴했으면 0행 */
+    @Modifying
+    @Query("""
+            UPDATE Member m SET m.name = :name
+            WHERE m.id = :id AND m.status = com.fivexbread.member.MemberStatus.ACTIVE
+            """)
+    int rename(@Param("id") long id, @Param("name") String name);
+
     /** 임시 비밀번호 저장 (A-09). 읽은 뒤 탈퇴했으면 0행 */
     @Modifying
     @Query("""
