@@ -36,7 +36,7 @@ public class AdminReservationController {
 
     /**
      * 수령용 검색 (A-06, 13-9 2단계). 예약번호와 뒷 4자리 중 정확히 하나. 판매일을 비우면 오늘.
-     * 둘 다 없으면 판매일 전체 목록이 되는데, 그것은 픽업 준비 목록(A-05, 2차)이라 400
+     * 둘 다 없으면 판매일 전체 목록이 되는데, 그것은 픽업 준비 목록(A-05, GET /admin/sale-dates/{date}/reservations)이라 400
      */
     @GetMapping
     public List<AdminReservationResponse> search(
@@ -56,6 +56,12 @@ public class AdminReservationController {
             throw invalid("phoneLast4", "Pattern", "번호 뒷 4자리는 숫자 4자리입니다");
         }
         return queryService.search(saleDate == null ? LocalDate.now(clock) : saleDate, no, last4, status);
+    }
+
+    /** 사장님 예약 상세. 손님 상세 + 회원(마스킹) + 상태 이력. 없으면 404 */
+    @GetMapping("/{reservationId}")
+    public AdminReservationDetailResponse detail(@PathVariable long reservationId) {
+        return queryService.detail(reservationId);
     }
 
     @PatchMapping(value = "/{reservationId}", consumes = ReservationController.MERGE_PATCH_JSON)

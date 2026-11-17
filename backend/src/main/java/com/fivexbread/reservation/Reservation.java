@@ -139,12 +139,21 @@ public class Reservation {
     }
 
     public LocalDateTime cancelDeadline() {
-        return pickupAt.minusMinutes(CANCEL_DEADLINE_MINUTES);
+        return cancelDeadline(pickupAt);
     }
 
     /** 손님이 지금 취소할 수 있는지 (C-05 cancelable). 화면이 버튼을 계산하지 않게 cancel 과 같은 규칙으로 내려준다 */
     public boolean cancelable(LocalDateTime now) {
-        return status == ReservationStatus.RESERVED && !deadlinePassed(now);
+        return cancelable(status, pickupAt, now);
+    }
+
+    /** 엔티티 없이 읽은 행(사장님 상세)도 같은 규칙을 쓰도록 */
+    static LocalDateTime cancelDeadline(LocalDateTime pickupAt) {
+        return pickupAt.minusMinutes(CANCEL_DEADLINE_MINUTES);
+    }
+
+    static boolean cancelable(ReservationStatus status, LocalDateTime pickupAt, LocalDateTime now) {
+        return status == ReservationStatus.RESERVED && !now.isAfter(cancelDeadline(pickupAt));
     }
 
     private boolean deadlinePassed(LocalDateTime now) {
