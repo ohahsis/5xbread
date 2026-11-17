@@ -6,6 +6,7 @@ import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
@@ -62,6 +63,14 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<Object> handleStoreDown(Exception ex, WebRequest request) {
         log.error("저장소 연결 실패 또는 시간 초과", ex);
         return respond(ErrorCode.SERVICE_UNAVAILABLE, request);
+    }
+
+    // DB 데드락(1213)·락 대기 초과(1205, innodb_lock_wait_timeout 5초). 다시 보내면 대개 성공하는 일시적 충돌이라
+    // 장애(503)가 아니라 409 로 낸다. 5xx 지표·경고에 섞이지 않게 (decisions.md 6장 "DB 락 실패 응답")
+    @ExceptionHandler(PessimisticLockingFailureException.class)
+    public ResponseEntity<Object> handleLockFailure(PessimisticLockingFailureException ex, WebRequest request) {
+        log.warn("DB 락 획득 실패 {}", ex.getClass().getSimpleName());
+        return respond(ErrorCode.LOCK_CONFLICT, request);
     }
 
     // 처리하지 못한 예외: 내부 메시지는 응답에 넣지 않고 traceId로 로그와 연결

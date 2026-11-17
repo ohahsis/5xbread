@@ -123,6 +123,16 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
+    void DB_데드락과_락_대기_초과는_500이_아니라_409_LOCK_CONFLICT() throws Exception {
+        for (String path : List.of("/test/deadlock", "/test/lock-wait-timeout")) {
+            mockMvc.perform(get(path))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("LOCK_CONFLICT"))
+                    .andExpect(jsonPath("$.detail").doesNotExist());
+        }
+    }
+
+    @Test
     void 깨진_JSON_본문은_400이고_Spring_기본_detail을_노출하지_않는다() throws Exception {
         mockMvc.perform(post("/test/validate")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -167,6 +177,18 @@ class ApiExceptionHandlerTest {
         @GetMapping("/test/jdbc-down")
         void jdbcDown() {
             throw new org.springframework.jdbc.CannotGetJdbcConnectionException("Failed to obtain JDBC Connection");
+        }
+
+        @GetMapping("/test/deadlock")
+        void deadlock() {
+            throw new org.springframework.dao.DeadlockLoserDataAccessException("Deadlock found when trying to get lock",
+                    new java.sql.SQLException("Deadlock found", "40001", 1213));
+        }
+
+        @GetMapping("/test/lock-wait-timeout")
+        void lockWaitTimeout() {
+            throw new org.springframework.dao.CannotAcquireLockException("Lock wait timeout exceeded",
+                    new java.sql.SQLException("Lock wait timeout exceeded", "HY000", 1205));
         }
 
         @GetMapping("/test/boom")

@@ -30,7 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 1. If-Match 버전이 현재와 다르면 412 (검사 전에 빨리 끝냄)
  * 2. 모든 행 검사 → 틀린 행이 하나라도 있으면 전부 모아 422, 아무것도 바꾸지 않음
  * 3. sale_date 버전 조건부 +1 → 0행이면 다른 저장이 먼저 커밋한 것 → 412. 이 UPDATE 가 행을 잠가 동시 저장이 한 줄로 선다
- * 4. 행별 UPDATE(총량은 예약 수량 이상일 때만) → 0행이 하나라도 있으면 전체 롤백 후 422 STOCK_BELOW_RESERVED
+ * 4. 행별 UPDATE(총량은 예약 수량 이상일 때만) → 0행이 하나라도 있으면 전체 롤백 후 422 STOCK_BELOW_RESERVED.
+ *    breadId 오름차순으로 잠근다. 예약(ReservationRuleService)도 같은 순서라 서로 반대 순서로 기다리는 데드락이 없다.
+ *    그래도 락을 얻지 못하면(락 대기 5초 초과 등) 409 LOCK_CONFLICT (ApiExceptionHandler)
  * 5. 기존 행의 총량을 늘렸으면 outbox_event(STOCK_INCREASE). 커밋 후 StockFacade 가 바로 처리하고, 못 하면 폴러가 처리한다
  * 요청에 없는 빵의 행은 그대로 둔다.
  */
@@ -92,7 +94,9 @@ public class StockService {
         }
         List<Long> belowReserved = new ArrayList<>();
         Map<Long, Integer> increases = new LinkedHashMap<>();
-        for (StockRowRequest row : rows) {
+        // 요청 순서가 아니라 breadId 순서로 행을 잠근다 (decisions.md 6장 "A-02 잠금 순서")
+        List<StockRowRequest> byBreadId = rows.stream().sorted(Comparator.comparing(StockRowRequest::breadId)).toList();
+        for (StockRowRequest row : byBreadId) {
             DailyStock stock = stocks.get(row.breadId());
             if (stock != null && row.reservableQty() > stock.getReservableQty()) {
                 increases.put(row.breadId(), row.reservableQty() - stock.getReservableQty());
