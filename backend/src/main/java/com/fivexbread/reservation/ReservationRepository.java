@@ -12,6 +12,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface ReservationRepository extends JpaRepository<Reservation, Long> {
 
+    /** Idempotency-Key 로 커밋된 예약 찾기 (uk_reservation_idem). DB 실패 뒤 실제로 커밋됐는지 확인할 때 쓴다 */
+    Optional<Reservation> findByIdempotencyKey(String idempotencyKey);
+
     /** 손님 본인 예약. PK 로 1행을 찾은 뒤 member_id 를 비교해 추가 인덱스가 필요 없다 (13-2 어필 포인트) */
     Optional<Reservation> findByIdAndMemberId(long id, long memberId);
 
