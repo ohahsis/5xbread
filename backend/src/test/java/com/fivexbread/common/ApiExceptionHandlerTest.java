@@ -133,6 +133,60 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
+    void 저장소_장애_503에는_Retry_After_5초_락_실패_409에는_1초() throws Exception {
+        for (String path : List.of("/test/redis-timeout", "/test/db-down", "/test/jdbc-down", "/test/business-unavailable")) {
+            mockMvc.perform(get(path))
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(header().string("Retry-After", "5"));
+        }
+        mockMvc.perform(get("/test/deadlock"))
+                .andExpect(status().isConflict())
+                .andExpect(header().string("Retry-After", "1"));
+    }
+
+    @Test
+    void 예외가_직접_넣은_Retry_After는_그대로_둔다() throws Exception {
+        mockMvc.perform(get("/test/rate-limited"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "7"));
+        mockMvc.perform(get("/test/out-of-stock"))
+                .andExpect(header().doesNotExist("Retry-After"));
+    }
+
+    @Test
+    void 처리할_수_없는_상태의_Redis_오류는_503() throws Exception {
+        for (String error : List.of(
+                "READONLY You can't write against a read only replica.",
+                "OOM command not allowed when used memory > 'maxmemory'.",
+                "LOADING Redis is loading the dataset in memory",
+                "BUSY Redis is busy running a script. You can only call SCRIPT KILL or SHUTDOWN NOSCRIPT.")) {
+            mockMvc.perform(get("/test/redis-error").param("message", error))
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
+                    .andExpect(header().string("Retry-After", "5"));
+        }
+    }
+
+    @Test
+    void 그_밖의_Redis_오류는_코드_결함이라_500() throws Exception {
+        mockMvc.perform(get("/test/redis-error")
+                        .param("message", "WRONGTYPE Operation against a key holding the wrong kind of value"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
+                .andExpect(header().doesNotExist("Retry-After"));
+    }
+
+    @Test
+    void 다시_연결하면_될_수_있는_DB_오류와_트랜잭션_시간_초과는_503() throws Exception {
+        for (String path : List.of("/test/db-recoverable", "/test/db-transient", "/test/tx-timeout")) {
+            mockMvc.perform(get(path))
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
+                    .andExpect(header().string("Retry-After", "5"));
+        }
+    }
+
+    @Test
     void 깨진_JSON_본문은_400이고_Spring_기본_detail을_노출하지_않는다() throws Exception {
         mockMvc.perform(post("/test/validate")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -189,6 +243,39 @@ class ApiExceptionHandlerTest {
         void lockWaitTimeout() {
             throw new org.springframework.dao.CannotAcquireLockException("Lock wait timeout exceeded",
                     new java.sql.SQLException("Lock wait timeout exceeded", "HY000", 1205));
+        }
+
+        @GetMapping("/test/business-unavailable")
+        void businessUnavailable() {
+            throw new BusinessException(ErrorCode.SERVICE_UNAVAILABLE);
+        }
+
+        @GetMapping("/test/rate-limited")
+        void rateLimited() {
+            throw BusinessException.withRetryAfter(ErrorCode.TOO_MANY_REQUESTS, 7);
+        }
+
+        @GetMapping("/test/redis-error")
+        void redisError(@org.springframework.web.bind.annotation.RequestParam String message) {
+            throw new org.springframework.data.redis.RedisSystemException("Error in execution",
+                    new io.lettuce.core.RedisCommandExecutionException(message));
+        }
+
+        @GetMapping("/test/db-recoverable")
+        void dbRecoverable() {
+            throw new org.springframework.dao.RecoverableDataAccessException("Connection reset",
+                    new java.sql.SQLRecoverableException("Connection reset"));
+        }
+
+        @GetMapping("/test/db-transient")
+        void dbTransient() {
+            throw new org.springframework.dao.TransientDataAccessResourceException("Connection is not available",
+                    new java.sql.SQLTransientConnectionException("request timed out"));
+        }
+
+        @GetMapping("/test/tx-timeout")
+        void txTimeout() {
+            throw new org.springframework.transaction.TransactionTimedOutException("Transaction timed out");
         }
 
         @GetMapping("/test/boom")
