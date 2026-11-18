@@ -1,16 +1,22 @@
 package com.fivexbread.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fivexbread.support.IntegrationTestSupport;
 import com.zaxxer.hikari.HikariDataSource;
+import java.time.Duration;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.actuate.health.HealthEndpointGroups;
 import org.springframework.core.env.Environment;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 /** application.yml 의 설정 값이 실제 빈에 들어갔는지 본다 (decisions.md 6장) */
@@ -32,6 +38,9 @@ class ConfigWiringTest extends IntegrationTestSupport {
     @Autowired
     HealthEndpointGroups healthGroups;
 
+    @Autowired
+    PlatformTransactionManager transactionManager;
+
     @Test
     void 스케줄러는_spring_task_scheduling_pool_size_4를_builder로_받는다() {
         // getPoolSize() 는 지금 떠 있는 스레드 수라 설정 값은 core pool size 로 본다
@@ -44,6 +53,30 @@ class ConfigWiringTest extends IntegrationTestSupport {
         // 테스트는 @ServiceConnection 이 컨테이너 URL 로 바꾸므로 application.yml 의 값은 설정으로 본다 (local·docker 프로필이 쓰는 URL)
         assertThat(environment.getRequiredProperty("spring.datasource.url"))
                 .contains("connectTimeout=2000", "socketTimeout=10000", "sessionVariables=innodb_lock_wait_timeout=5");
+    }
+
+    @Test
+    void Flyway는_socketTimeout_없이_따로_연결한다() {
+        // 테스트는 @ServiceConnection 이 Flyway 연결도 컨테이너 URL 로 바꾸므로 설정 값으로 본다 (local·docker 프로필)
+        String flywayUrl = environment.getRequiredProperty("spring.flyway.url");
+
+        assertThat(flywayUrl).contains("connectTimeout=2000").doesNotContain("socketTimeout");
+    }
+
+    @Test
+    void 트랜잭션_기본_시간_제한은_8초다() {
+        assertThat(((AbstractPlatformTransactionManager) transactionManager).getDefaultTimeout()).isEqualTo(8);
+    }
+
+    @Test
+    void 기본_시간_제한을_넘긴_트랜잭션의_쿼리는_8초에서_끊긴다() {
+        // socketTimeout(10초)보다 먼저 트랜잭션 시간 제한이 쿼리 시간 제한으로 걸리는지. SLEEP(9) 는 socketTimeout 에는 걸리지 않는다
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        long started = System.nanoTime();
+
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> jdbcTemplate.queryForObject("SELECT SLEEP(9)", Integer.class)))
+                .isInstanceOf(QueryTimeoutException.class);
+        assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofMillis(8_900));
     }
 
     @Test

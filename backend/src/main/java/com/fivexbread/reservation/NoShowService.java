@@ -1,5 +1,6 @@
 package com.fivexbread.reservation;
 
+import com.fivexbread.common.BatchTransaction;
 import com.fivexbread.member.MemberRepository;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -30,7 +31,7 @@ public class NoShowService {
     }
 
     /** 상태 변경과 이력을 한 트랜잭션에 남긴다. 이력(actor 없음 = 시스템) 없이 바뀐 예약이 생기지 않는다 */
-    @Transactional(isolation = Isolation.READ_COMMITTED)
+    @Transactional(isolation = Isolation.READ_COMMITTED, timeout = BatchTransaction.TIMEOUT_SECONDS)
     public Chunk markChunk(LocalDate saleDate, int size) {
         List<Long> candidates = reservationRepository.findReservedIds(saleDate, size);
         if (candidates.isEmpty()) {
@@ -51,12 +52,12 @@ public class NoShowService {
         return new Chunk(candidates.size(), marked);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, timeout = BatchTransaction.TIMEOUT_SECONDS)
     public List<LocalDate> saleDatesWithReserved(LocalDate from, LocalDate to) {
         return reservationRepository.findSaleDatesWithReserved(from, to);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, timeout = BatchTransaction.TIMEOUT_SECONDS)
     public List<Long> noShowMemberIds(LocalDate saleDate) {
         return reservationRepository.findNoShowMemberIds(saleDate);
     }
@@ -66,7 +67,7 @@ public class NoShowService {
      *
      * @return 제한이 새로 걸리거나 늘어난 회원 수
      */
-    @Transactional(isolation = Isolation.READ_COMMITTED)
+    @Transactional(isolation = Isolation.READ_COMMITTED, timeout = BatchTransaction.TIMEOUT_SECONDS)
     public int applyBlocks(List<Long> memberIds, LocalDate saleDate) {
         List<Long> repeated = reservationRepository.findRepeatNoShowMemberIds(memberIds,
                 NoShowRule.windowStart(saleDate), saleDate, NoShowRule.BLOCK_THRESHOLD);
