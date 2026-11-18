@@ -6,7 +6,9 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fivexbread.auth.JwtProvider;
@@ -29,15 +31,18 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.TransientDataAccessResourceException;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -80,6 +85,9 @@ class ReservationCommitCheckTest extends IntegrationTestSupport {
     @MockitoSpyBean
     ReservationQueryService queryService;
 
+    @MockitoSpyBean
+    ReservationNumbers numbers;
+
     private SaleDateTestData data;
     private LocalDate date;
     private long slot;
@@ -102,7 +110,7 @@ class ReservationCommitCheckTest extends IntegrationTestSupport {
 
     @AfterEach
     void tearDown() {
-        reset(txService, queryService);
+        reset(txService, queryService, numbers);
         mutableClock.reset();
         data.clean();
     }
@@ -188,11 +196,11 @@ class ReservationCommitCheckTest extends IntegrationTestSupport {
             jdbcTemplate.update("UPDATE member SET status = 'WITHDRAWN' WHERE id = ?", member);
             return invocation.callRealMethod();
         }).when(txService).create(any(), anyString(), anyString());
-        doThrow(new AssertionError("조회하면 안 됨")).when(queryService).findCreated(anyLong(), anyString());
 
         ResponseEntity<JsonNode> failed = post(UUID.randomUUID(), Map.of(3L, 2));
 
         assertThat(failed.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        verify(queryService, never()).findCreated(anyLong(), anyString());
         assertThat(redisStock(3)).isEqualTo(50);
     }
 
@@ -200,12 +208,50 @@ class ReservationCommitCheckTest extends IntegrationTestSupport {
     void 락_실패면_커밋_여부를_조회하지_않고_보상하고_409_LOCK_CONFLICT() {
         doThrow(new CannotAcquireLockException("Lock wait timeout exceeded")).when(txService)
                 .create(any(), anyString(), anyString());
-        doThrow(new AssertionError("조회하면 안 됨")).when(queryService).findCreated(anyLong(), anyString());
 
         ResponseEntity<JsonNode> failed = post(UUID.randomUUID(), Map.of(3L, 2));
 
         assertThat(failed.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        verify(queryService, never()).findCreated(anyLong(), anyString());
         assertThat(failed.getBody().get("code").asText()).isEqualTo("LOCK_CONFLICT");
+        assertThat(redisStock(3)).isEqualTo(50);
+    }
+
+    @Test
+    void 트랜잭션을_열지_못하면_커밋_여부를_조회하지_않고_보상하고_503() {
+        doThrow(new CannotCreateTransactionException("Connection is not available, request timed out after 10000ms"))
+                .when(txService).create(any(), anyString(), anyString());
+
+        ResponseEntity<JsonNode> failed = post(UUID.randomUUID(), Map.of(3L, 2));
+
+        assertThat(failed.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        verify(queryService, never()).findCreated(anyLong(), anyString());
+        assertThat(redisStock(3)).isEqualTo(50);
+        assertThat(redis.opsForHash().get(StockKeys.userQty(date, member), "3")).isIn("0", null);
+    }
+
+    @Test
+    void JDBC_커넥션을_얻지_못하면_커밋_여부를_조회하지_않고_보상하고_503() {
+        doThrow(new CannotGetJdbcConnectionException("Failed to obtain JDBC Connection"))
+                .when(txService).create(any(), anyString(), anyString());
+
+        ResponseEntity<JsonNode> failed = post(UUID.randomUUID(), Map.of(3L, 2));
+
+        assertThat(failed.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        verify(queryService, never()).findCreated(anyLong(), anyString());
+        assertThat(redisStock(3)).isEqualTo(50);
+    }
+
+    @Test
+    void 예약번호를_얻지_못하면_트랜잭션도_커밋_여부_조회도_없이_보상하고_503() {
+        doThrow(new RedisConnectionFailureException("예약번호 INCR 실패")).when(numbers).next(any());
+
+        ResponseEntity<JsonNode> failed = post(UUID.randomUUID(), Map.of(3L, 2));
+
+        assertThat(failed.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        verify(txService, never()).create(any(), anyString(), anyString());
+        verify(queryService, never()).findCreated(anyLong(), anyString());
+        assertThat(reservationCount()).isZero();
         assertThat(redisStock(3)).isEqualTo(50);
     }
 
