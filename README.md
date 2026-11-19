@@ -27,7 +27,7 @@ Java 21, Spring Boot 3.5.16, Gradle 8.14(Kotlin DSL), MySQL 8, Redis 7, Flyway, 
                 │              │              │
         ┌───────┴──────────────┴──────────────┴───────┐
         ▼                                             ▼
-   Redis 7 (AOF)                                 MySQL 8 (KST)
+   Redis 7 (AOF, 비밀번호, noeviction)           MySQL 8 (KST)
    · 재고·1인 누적 (Lua 검사+차감)                 · 조건부 UPDATE로 최종 확정
    · stockver + PUBLISH (실시간)                  · outbox_event (attempts·dead)
    · Pub/Sub: 잔여 변경, 캐시 무효화               · Flyway V1~V4
@@ -41,8 +41,8 @@ Java 21, Spring Boot 3.5.16, Gradle 8.14(Kotlin DSL), MySQL 8, Redis 7, Flyway, 
 **예약 한 건의 흐름** (`reservation` 패키지, Controller → Facade → Service → Domain → Repository)
 
 1. Redis Lua 한 번으로 모든 빵의 잔여·1인 한도를 검사하고 전부 통과하면 함께 차감 (하나라도 부족하면 아무것도 안 바뀜)
-2. DB 트랜잭션에서 `reserved_qty + n <= reservable_qty` 조건부 UPDATE와 예약 저장. 트랜잭션 안에서는 Redis를 부르지 않는다
-3. DB가 실패하면 1의 차감을 같은 Lua로 되돌린다(보상). 0행이면 409 `OUT_OF_STOCK`
+2. DB 트랜잭션(시간 제한 8초)에서 회원 행을 잠그고 하루 건수·1인 한도를 DB로 다시 검사한 뒤, `reserved_qty + n <= reservable_qty` 조건부 UPDATE와 예약 저장. 트랜잭션 안에서는 Redis를 부르지 않는다
+3. DB가 실패하면 1의 차감을 같은 Lua로 되돌린다(보상). 0행이면 409 `OUT_OF_STOCK`. 실패 원인을 모르면(쿼리 시간 초과·연결 끊김) 보상 전에 같은 Idempotency-Key의 예약이 커밋됐는지 확인하고, 있으면 보상하지 않고 201
 4. 잔여를 바꾼 Lua가 같은 스크립트에서 버전을 올리고 발행 → 앱마다 200ms씩 모아 STOMP로 구독자에게
 
 **취소**: DB 커밋(`status = 'RESERVED'` 조건부 UPDATE + `outbox_event`) → 커밋 직후 바로 Redis에 반영하고, 못 했으면(실패·앱 종료) 남은 이벤트를 폴러가 처리 → 복구 Lua는 `applied` 키를 SET NX로 잡아 같은 이벤트를 한 번만 적용
@@ -104,7 +104,6 @@ docker compose -f compose.full.yaml --profile monitoring up -d --build --wait
 | `./load/run.sh` | 테스트 손님 1,000명(`load/seed.sql`)이 재고 120개인 빵을 동시에 1개씩 예약 | 초과 예약 0, DB 예약 수량 = 예약 합, Redis 잔여 = DB 잔여, 201 수 = 예약 수량, 5xx 0 |
 | `./load/run.sh --with-cancel` | 같은 예약에 취소와 다시 예약을 섞음 | 위 판정 + 취소 200 = DB 취소 건수, 201 − 취소 = 예약 수량, 아웃박스 미발행 0 |
 | `./load/realtime-check.sh` | STOMP 리스너 6개(앱 3개에 나뉨) + 예약 3건 | 모든 리스너가 버전 1·2·3을 순서대로 받고, 마지막 잔여 = Redis = 목록, 다른 앱이 처리한 예약도 받음 |
-
 | `./load/steady.sh --scenario spread\|hot --rate N` | 손님 10,000명(`load/seed-steady.sql`)이 초당 N건을 60초 동안. spread는 판매일 5 × 빵 20종, hot은 한 빵(총량 500)에 몰림 | 판매일·빵마다 예약 수량 = 예약 합 ≤ 총량, Redis 잔여 = DB(v2). 5xx·dropped는 결과로만 |
 | `./load/chaos.sh` | spread 초당 20건 × 180초(취소 섞음) 중에 Redis pause 30초 / app2 kill → start / MySQL restart를 하나씩. 모니터링 profile 필요 | 부하가 끝난 뒤 초과 예약 0, Redis = DB(100행), 아웃박스 미발행 0. 응답 코드 분포·회복 시간은 `load/results/chaos-{시각}/summary.md` |
 | `./load/compare.sh --rate-spread N --rate-hot M` | 예약 v1(`RESERVATION_MODE=db-only`) ↔ v2를 번갈아 3라운드, 워밍업 1회 버림. 모니터링 profile 필요 | 위 판정. 결과는 `load/results/{시각}/`(k6 summary JSON, Prometheus 값, `summary.md`) |
@@ -190,18 +189,26 @@ v1은 **재고·한도 검사를 DB로** 하는 방식(`RESERVATION_MODE=db-only
 
 ## 장애 실험 (2026-11-17)
 
-`./load/chaos.sh`. 앱 3개에 초당 20건(예약 + 앞서 만든 예약의 취소 20%)을 180초 동안 보내며 30초 뒤에 장애를 하나 넣었습니다. 환경은 위와 같고 실험마다 1회입니다.
+`./load/chaos.sh`. 앱 3개에 초당 20건(예약 + 앞서 만든 예약의 취소 20%)을 180초 동안 보내며 30초 뒤에 장애를 하나 넣었습니다. 환경은 위와 같고 실험마다 1회입니다. **#23 이전 설정**(Hikari 커넥션 대기 30초, 트랜잭션 시간 제한 없음)에서 잰 값이고, #23~#25 뒤(Hikari 10초, 트랜잭션 8초)에는 다시 돌리지 않았습니다.
 
 | 장애 | 손님이 받은 응답 | 회복 | 끝난 뒤 정합성 |
 |---|---|---|---|
 | Redis 응답 없음 30초 (`docker pause`) | 예약 503 555건(각 약 2초), 취소는 모두 200(약 4초) | unpause 직후 오류 0. 장애 중 쌓인 아웃박스 93행은 최대 57초 뒤 모두 발행 | 초과 예약 0, Redis = DB, 미발행 0, dead 0 |
 | 앱 1개 다운 (`kill app2` → 20초 뒤 `start`) | 5xx **0**. 연결 실패 37건은 Nginx가 다른 앱으로 넘김(최대 2초) | app2는 start 18초 뒤부터 다시 요청을 받음 | 초과 예약 0, Redis = DB, 미발행 0, dead 0 |
-| MySQL 재시작 (`restart`) | 재시작 순간 약 1초 동안 503 30건, 그 뒤 약 3초는 기다렸다가 성공(최대 4.3초) | restart가 끝나기 전에 오류 0 | 초과 예약 0, Redis = DB, 미발행 0, dead 0 |
+| MySQL 재시작 (`restart`) | 재시작 순간 약 1초 동안 503 30건, 그 뒤 약 3초는 커넥션을 기다렸다가 성공(최대 4.3초. 지금 설정에서는 10초를 넘는 DB 장애부터 기다리던 요청이 503) | restart가 끝나기 전에 오류 0 | 초과 예약 0, Redis = DB, 미발행 0, dead 0 |
 
 - 실험에서 찾아 고친 것: MySQL 연결 장애가 500 `INTERNAL_ERROR`로 나가던 것을 Redis 장애와 같은 503으로 바꿨습니다
 - 응답만 멈춘 Redis(`pause`)는 클라이언트에서 시간 초과로 끝난 명령을 재개 뒤 그대로 실행합니다. 아웃박스는 멱등이라 영향이 없습니다. 같은 일로 Idempotency 처리 중 표시가 남아 같은 키가 24시간 409가 될 수 있던 것은 표시를 2분만 두도록 고쳤습니다(decisions.md 6장 "Idempotency 처리 중 TTL")
 - 아웃박스는 처리 실패를 `attempts`로 세고 10번째에 dead로 표시해 더 집지 않습니다. 그 재고는 N-05 정합성 점검이 맞춥니다(decisions.md 6장 "아웃박스 실패 한도")
 - 방법·초별 값·예상과 달랐던 것: [`docs/measurements/2026-11-17-chaos.md`](docs/measurements/2026-11-17-chaos.md)
+
+## 외부 코드 리뷰 반영 (#23~#25)
+
+- **확인한 것**: 예약 DB 실패 뒤 보상이 커밋된 예약까지 되돌릴 수 있는지, 한도가 Redis `user_qty` 하나에만 기대는지, DB·트랜잭션 시간 제한, 장애 응답 코드(500/503/409), Nginx가 두 번 처리하면 안 되는 PUT·DELETE를 다시 보내는지, Redis 접근 보호
+- **고친 것**: 예약 트랜잭션에서 한도 DB 재검사(회원 행 잠금), DB 실패를 세 가지로 나눠 결과를 모를 때만 커밋 확인 후 보상, 시간 제한(연결 2초·쿼리 10초·락 대기 5초 → 409 `LOCK_CONFLICT`·트랜잭션 8초·배치 30초), 연결·시간 초과·Redis `OOM`/`READONLY` 등은 503 + `Retry-After`, 토큰 재발급·비밀번호 변경·탈퇴·판매일·수량 PUT은 Nginx 재시도 끔, `REDIS_PASSWORD` 필수 + noeviction, 스케줄러 스레드 4개
+- **측정으로 바꾼 값**: Hikari 커넥션 대기 3초 → 동시 예약 1,000건에서 503 36건(관측 최대 대기 약 5.4초) → **10초**로 5xx 0. 한도 DB 재검사는 같은 측정 3라운드에서 p95 3.32초 → 3.36초로 편차 안
+- **다음 개선으로 남긴 것**: hold 토큰, 같은 키 201 replay, Refresh 회전 유예, 아웃박스 지수 백오프, traceId, 백업·PITR 등 9개(설계 변경이 커서)
+- 자세한 근거: decisions.md 6장 "예약 v2 한도 DB 재검사"·"예약 DB 실패 뒤 보상 판단"·"DB 시간 제한"·"저장소 장애 응답"·"Nginx 재시도", 4장 "다음 개선"
 
 ## 1차 범위
 
@@ -214,4 +221,6 @@ decisions.md 4장이 기준입니다. 요약:
 
 ## 2차로 미룬 것
 
-사장님 화면 전체, 손님 화면 나머지(C-08 빵 상세, C-10 비밀번호 변경, C-11 예약 제한 안내, C-05 예정·지난 예약 탭), A-03 수량 복사, A-05 대시보드 실시간·픽업 준비 목록 인쇄, A-11 판매 통계, 탈퇴, 사진 WEBP 변환, 오래된 데이터 아카이브. (대시보드 경고·업무 지표, 아웃박스 dead letter, 장애 실험은 2차에서 완료) 전체 목록과 근거는 decisions.md 4장 "2차로 미룸"에 있습니다.
+사장님 화면 전체, 손님 화면 나머지(C-08 빵 상세, C-10 비밀번호 변경·이름 수정, C-11 예약 제한 안내, C-05 예정·지난 예약 탭), A-03 수량 복사, A-05 대시보드 집계·실시간 구독·픽업 준비 목록 인쇄 화면, A-10 회원 검색 고도화, A-11 판매 통계, 사진 WEBP 변환, 오래된 데이터 아카이브. (2차에서 완료: 손님 화면 핵심, v1/v2 비교 측정, Prometheus·Grafana와 경고·업무 지표, 아웃박스 dead letter, 장애 실험, AU-07 탈퇴, C-10 이름 수정 API, A-05 판매일 예약 목록·픽업 준비 합계 API, 사장님 예약 상세) 전체 목록과 근거는 decisions.md 4장 "2차로 미룸"에 있습니다.
+
+외부 리뷰 뒤 다음 개선으로 남긴 항목(hold 토큰, 같은 키 201 replay, Refresh 회전 유예 등 9개): [decisions.md 4장 "다음 개선"](docs/decisions.md#다음-개선-2차-외부-리뷰에서-이번에-하지-않은-것-2026-11-18)
