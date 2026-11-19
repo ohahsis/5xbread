@@ -44,6 +44,7 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: 6379
+      password: ${REDIS_PASSWORD:}   # requirepass (compose 두 개). 테스트는 IntegrationTestSupport 가 넣는다
       connect-timeout: 1s
       timeout: 2s                 # 기본 60초면 Redis 장애 때 요청마다 60초 멈춘다. 목록의 DB 폴백·예약 503 이 이 시간 뒤에 나온다
 
@@ -65,7 +66,7 @@ server:
   shutdown: graceful
   tomcat:
     # 연결 대기열(listen backlog). 기본 100이면 재시작 직후 로그인 폭주 때 앱마다 수백 건의 SYN 이 버려지고,
-    # 재전송이 Nginx proxy_connect_timeout(2s)을 넘기면 그 앱이 10초 동안 빠진다 (decisions.md "재시작 직후 로그인 폭주")
+    # 재전송이 Nginx proxy_connect_timeout(2s)을 넘기면 연결 실패로 세고, 10초 안에 3번이면(max_fails=3) 그 앱이 10초 동안 빠진다 (decisions.md "재시작 직후 로그인 폭주")
     accept-count: 1000
   forward-headers-strategy: native   # Nginx 뒤에서 X-Forwarded-For 읽기 (정의서 13-5)
 
@@ -94,7 +95,8 @@ fivexbread:
     rate-limit-per-second: 5      # N-23: 회원당 초당 예약 요청
     idempotency-ttl: 24h          # N-06: Idempotency 결과(성공 201) 보관
     # 처리 중 표시 보관. 요청 처리 상한보다 길게, 남은 표시가 하루 동안 409 를 내지 않도록. 상한 ≈ Redis 명령(2초) 몇 번
-    # + 예약 트랜잭션(Hikari 대기 10초 + 트랜잭션 8초) + 결과 모를 때 커밋 확인 조회(Hikari 대기 10초 + 2초) ≈ 40초 (decisions.md 6장 "Idempotency 처리 중 TTL")
+    # + 예약 트랜잭션(Hikari 대기 10초 + 트랜잭션 8초) + 결과 모를 때 커밋 확인 조회(풀 대기가 있으면 하지 않음. 최악 Hikari 대기 10초 + 2초)
+    # ≈ 40초 (decisions.md 6장 "Idempotency 처리 중 TTL")
     idempotency-processing-ttl: 2m
     mode: ${RESERVATION_MODE:redis}   # redis(v2, 운영) | db-only(v1, 재고·한도 검사를 DB로. 비교 측정용, docker·test 프로필에서만)
   catalog-cache:

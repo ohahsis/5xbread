@@ -3,6 +3,8 @@ package com.fivexbread.support;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.MySQLContainer;
 
@@ -27,12 +29,24 @@ public abstract class IntegrationTestSupport {
             .withUrlParam("socketTimeout", "10000")
             .withUrlParam("sessionVariables", "innodb_lock_wait_timeout=5");
 
-    @ServiceConnection(name = "redis")
-    static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7").withExposedPorts(6379);
+    // compose 두 개와 같은 Redis 설정: 비밀번호와 noeviction (decisions.md 2장 "Redis 비밀번호").
+    // @ServiceConnection 은 GenericContainer 의 비밀번호를 넘기지 못해(호스트·포트만) 아래 @DynamicPropertySource 로 넣는다
+    static final String REDIS_PASSWORD = "test-only-redis-password";
+
+    static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7")
+            .withCommand("redis-server", "--requirepass", REDIS_PASSWORD, "--maxmemory-policy", "noeviction")
+            .withExposedPorts(6379);
 
     static {
         MYSQL.start();
         REDIS.start();
+    }
+
+    @DynamicPropertySource
+    static void redisProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.data.redis.host", REDIS::getHost);
+        registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+        registry.add("spring.data.redis.password", () -> REDIS_PASSWORD);
     }
 
     /**

@@ -12,6 +12,7 @@ x-app: &app
     DB_USERNAME: fivexbread
     DB_PASSWORD: ${DB_PASSWORD:?.env 에 DB_PASSWORD 필요}
     REDIS_HOST: redis
+    REDIS_PASSWORD: ${REDIS_PASSWORD:?.env 에 REDIS_PASSWORD 필요}
     JWT_SECRET: ${JWT_SECRET:?.env 에 JWT_SECRET 필요}
     PICKUP_SECRET: ${PICKUP_SECRET:?.env 에 PICKUP_SECRET 필요}
     WITHDRAWN_PHONE_SECRET: ${WITHDRAWN_PHONE_SECRET:?.env 에 WITHDRAWN_PHONE_SECRET 필요}
@@ -26,6 +27,9 @@ x-app: &app
     REALTIME_ALLOWED_ORIGINS: ${REALTIME_ALLOWED_ORIGINS:-}
     RESERVATION_MODE: ${RESERVATION_MODE:-redis}   # db-only(v1)는 비교 측정 때만 (load/compare.sh, decisions.md 6장 "예약 측정 모드")
   mem_limit: 768m                 # 앱 1개당. 힙은 이 중 75% (Dockerfile MaxRAMPercentage)
+  # 프로세스가 죽으면(OOM 으로 JVM 종료 = Dockerfile ExitOnOutOfMemoryError 등) 다시 띄운다. docker compose stop 으로 멈춘 것은 그대로 둔다.
+  # Nginx 는 다시 뜬 앱을 resolve 로 다시 찾는다 (nginx.conf)
+  restart: unless-stopped
   stop_grace_period: 30s          # graceful shutdown(20초)이 끝나기 전에 SIGKILL 하지 않게
   depends_on:
     mysql: { condition: service_healthy }
@@ -63,7 +67,14 @@ services:
 
   redis:                          # compose.yaml 과 같은 설정 + healthcheck
     image: redis:7
-    command: ["redis-server", "--appendonly", "yes"]
+    # requirepass: 같은 네트워크의 다른 컨테이너가 재고·토큰 키를 읽고 쓰지 못하게.
+    # maxmemory + noeviction: 메모리가 차면 키를 지우지 않고 쓰기를 거부한다(OOM → 앱 503). 재고(stock:)·예약번호 키가
+    # 지워지면 초과 예약이나 번호 중복으로 이어진다 (decisions.md 2장 "Redis 비밀번호·메모리").
+    # 컨테이너 mem_limit 은 두지 않는다. 둘 때는 AOF 재작성 fork 의 copy-on-write 여유로 maxmemory 의 2배 이상
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?.env 에 REDIS_PASSWORD 필요}",
+              "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?.env 에 REDIS_PASSWORD 필요}   # healthcheck·load/*.sh 의 redis-cli 가 쓴다
     volumes:
       - redis-data:/data
     healthcheck:
@@ -82,7 +93,7 @@ services:
     <<: *app
     pull_policy: never
 
-  nginx:                          # 로드밸런서 + 손님 화면 정적 파일. 이미지는 frontend/Dockerfile (nginx:1.27 에 빌드 결과를 넣음)
+  nginx:                          # 로드밸런서 + 손님 화면 정적 파일. 이미지는 frontend/Dockerfile (nginx:1.27.5 에 빌드 결과를 넣음)
     build: ./frontend
     image: fivexbread-web:local
     ports:

@@ -2,6 +2,10 @@
 services:
   mysql:
     image: mysql:8.0
+    labels:
+      # local 프로필(spring-boot-docker-compose)은 application.yml 의 URL 대신 이 컨테이너로 URL 을 만든다.
+      # 시간 제한·락 대기를 같게 둔다 (decisions.md 6장 "DB 시간 제한"). Flyway 도 이 URL 을 쓴다(local 만 socketTimeout 이 붙음)
+      org.springframework.boot.jdbc.parameters: "serverTimezone=Asia/Seoul&characterEncoding=UTF-8&connectTimeout=2000&socketTimeout=10000&sessionVariables=innodb_lock_wait_timeout=5"
     environment:
       MYSQL_DATABASE: fivexbread
       MYSQL_USER: fivexbread
@@ -19,9 +23,17 @@ services:
 
   redis:
     image: redis:7
-    command: ["redis-server", "--appendonly", "yes"]
+    # compose.full.yaml 과 같은 비밀번호·메모리 설정 (decisions.md 2장 "Redis 비밀번호·메모리")
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?.env 에 REDIS_PASSWORD 필요}",
+              "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?.env 에 REDIS_PASSWORD 필요}   # docker compose exec redis redis-cli 가 쓴다
+    labels:
+      # spring-boot-docker-compose 의 Redis 연결은 호스트·포트만 넘기고 비밀번호를 넘기지 못한다.
+      # 연결을 만들지 않게 하고 application.yml 의 spring.data.redis.*(localhost:6379 + REDIS_PASSWORD)를 쓴다
+      org.springframework.boot.ignore: "true"
     ports:
-      - "127.0.0.1:6379:6379"     # Redis 는 비밀번호가 없어 밖에 열면 누구나 읽고 쓴다
+      - "127.0.0.1:6379:6379"     # 내 PC 에서만. 비밀번호가 있어도 밖에 열지 않는다
     volumes:
       - redis-data:/data
 

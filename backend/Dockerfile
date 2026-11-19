@@ -23,6 +23,7 @@ USER app
 ENV TZ=Asia/Seoul
 # 시간대: main() 의 TimeZone.setDefault 와 별개로 JVM 시작 옵션에서도 KST 를 보장한다 (decisions.md 3장)
 # 메모리: 컨테이너 한도(mem_limit)의 75%를 힙으로. JAVA_OPTS 로 덧붙일 수 있다
-ENV JAVA_TOOL_OPTIONS="-Duser.timezone=Asia/Seoul -XX:MaxRAMPercentage=75"
+# OutOfMemoryError 가 나면 JVM 을 끝낸다. 반쯤 망가진 채(일부 스레드만 죽음) 요청을 받지 않고, compose 의 restart 가 다시 띄운다
+ENV JAVA_TOOL_OPTIONS="-Duser.timezone=Asia/Seoul -XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
 EXPOSE 8080
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS org.springframework.boot.loader.launch.JarLauncher"]

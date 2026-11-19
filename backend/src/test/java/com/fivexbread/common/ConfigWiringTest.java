@@ -50,8 +50,17 @@ class ConfigWiringTest extends IntegrationTestSupport {
 
     @Test
     void 운영_JDBC_URL에_연결_소켓_시간_제한과_락_대기_5초가_있다() {
-        // 테스트는 @ServiceConnection 이 컨테이너 URL 로 바꾸므로 application.yml 의 값은 설정으로 본다 (local·docker 프로필이 쓰는 URL)
+        // 테스트는 @ServiceConnection 이 컨테이너 URL 로 바꾸므로 application.yml 의 값은 설정으로 본다 (docker 프로필이 쓰는 URL)
         assertThat(environment.getRequiredProperty("spring.datasource.url"))
+                .contains("connectTimeout=2000", "socketTimeout=10000", "sessionVariables=innodb_lock_wait_timeout=5");
+    }
+
+    @Test
+    void local_프로필의_compose_MySQL_라벨에도_같은_시간_제한이_있다() throws Exception {
+        // local 은 spring-boot-docker-compose 가 application.yml 대신 compose.yaml 라벨로 URL 을 만든다 (decisions.md 2장 "로컬 인프라")
+        String compose = java.nio.file.Files.readString(java.nio.file.Path.of("../compose.yaml"));
+
+        assertThat(compose).contains("org.springframework.boot.jdbc.parameters:")
                 .contains("connectTimeout=2000", "socketTimeout=10000", "sessionVariables=innodb_lock_wait_timeout=5");
     }
 

@@ -8,5 +8,6 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:1.27
+# 1.27.5 고정: infra/nginx/nginx.conf 의 upstream resolve 는 1.27.3 부터 (움직이는 태그면 버전이 바뀌어도 모른다)
+FROM nginx:1.27.5
 COPY --from=build /app/dist /usr/share/nginx/html
