@@ -39,6 +39,7 @@ public class ReservationFacade {
     private final ReservationTxService txService;
     private final ReservationQueryService queryService;
     private final ReservationProperties properties;
+    private final ConnectionPoolStatus poolStatus;
 
     /** 201 응답. body 는 처음이면 ReservationResponse, 같은 키 재요청이면 저장된 JSON */
     public record Created(String location, Object body) {
@@ -80,7 +81,7 @@ public class ReservationFacade {
             return txService.create(plan, reservationNo, idempotencyKey);
         } catch (RuntimeException e) {
             ReservationDbFailure failure = ReservationDbFailure.classify(e);
-            if (failure == ReservationDbFailure.UNKNOWN) {
+            if (failure == ReservationDbFailure.UNKNOWN && !poolBusy(plan)) {
                 Optional<ReservationResponse> committed = findCommitted(plan, idempotencyKey);
                 if (committed.isPresent()) {
                     log.warn("예약 DB 호출이 실패했지만 커밋돼 있어 보상하지 않음 reservationId={} saleDate={} memberId={}",
@@ -88,7 +89,8 @@ public class ReservationFacade {
                     return committed.get();
                 }
             }
-            // NO_CONNECTION·ROLLED_BACK 은 조회 없이 보상한다. 커넥션이 모자라거나 락이 몰린 순간에 쿼리를 더 얹지 않는다
+            // NO_CONNECTION·ROLLED_BACK 은 조회 없이 보상한다. 커넥션이 모자라거나 락이 몰린 순간에 쿼리를 더 얹지 않는다.
+            // UNKNOWN 이라도 풀에서 기다리는 스레드가 있으면 조회하지 않고 보상한다(poolBusy)
             compensate(plan, generation);
             throw toResponseException(plan, e);
         }
@@ -107,6 +109,20 @@ public class ReservationFacade {
             return idempotencyConflict(integrity);
         }
         return e;
+    }
+
+    /**
+     * 풀에서 커넥션을 기다리는 스레드가 있으면 커밋 확인 조회도 최대 Hikari 대기(10초)를 더 기다린다. 조회 시간 제한(2초)은
+     * 커넥션을 얻은 뒤부터라 이 대기를 막지 못한다. 그래서 조회하지 않고 커밋되지 않은 것으로 보고 보상한다.
+     * 실제로 커밋됐다면 Redis 가 느슨해질 뿐이다(findCommitted 의 조회 실패와 같음).
+     */
+    private boolean poolBusy(ReservationPlan plan) {
+        if (!poolStatus.hasThreadsAwaitingConnection()) {
+            return false;
+        }
+        log.warn("예약 DB 결과를 모르지만 커넥션 풀 대기가 있어 커밋 확인 없이 보상 saleDate={} memberId={}",
+                plan.saleDate(), plan.memberId());
+        return true;
     }
 
     /**

@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -18,7 +19,17 @@ import com.fivexbread.saledate.StockKeys;
 import com.fivexbread.support.IntegrationTestSupport;
 import com.fivexbread.support.MutableClock;
 import com.fivexbread.support.MutableClockConfig;
+import com.zaxxer.hikari.HikariDataSource;
+import java.sql.Connection;
 import java.time.Clock;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import javax.sql.DataSource;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
@@ -79,6 +90,9 @@ class ReservationCommitCheckTest extends IntegrationTestSupport {
     @Autowired
     PlatformTransactionManager transactionManager;
 
+    @Autowired
+    DataSource dataSource;
+
     @MockitoSpyBean
     ReservationTxService txService;
 
@@ -87,6 +101,9 @@ class ReservationCommitCheckTest extends IntegrationTestSupport {
 
     @MockitoSpyBean
     ReservationNumbers numbers;
+
+    @MockitoSpyBean
+    ConnectionPoolStatus poolStatus;
 
     private SaleDateTestData data;
     private LocalDate date;
@@ -110,7 +127,7 @@ class ReservationCommitCheckTest extends IntegrationTestSupport {
 
     @AfterEach
     void tearDown() {
-        reset(txService, queryService, numbers);
+        reset(txService, queryService, numbers, poolStatus);
         mutableClock.reset();
         data.clean();
     }
@@ -215,6 +232,52 @@ class ReservationCommitCheckTest extends IntegrationTestSupport {
         verify(queryService, never()).findCreated(anyLong(), anyString());
         assertThat(failed.getBody().get("code").asText()).isEqualTo("LOCK_CONFLICT");
         assertThat(redisStock(3)).isEqualTo(50);
+    }
+
+    @Test
+    void 결과를_모르지만_커넥션_풀_대기가_있으면_커밋_여부를_조회하지_않고_보상한다() {
+        doThrow(new QueryTimeoutException("커밋 전 실패")).when(txService).create(any(), anyString(), anyString());
+        doReturn(true).when(poolStatus).hasThreadsAwaitingConnection();
+
+        ResponseEntity<JsonNode> failed = post(UUID.randomUUID(), Map.of(3L, 2));
+
+        assertThat(failed.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        verify(queryService, never()).findCreated(anyLong(), anyString());
+        assertThat(reservationCount()).isZero();
+        assertThat(redisStock(3)).isEqualTo(50);
+    }
+
+    @Test
+    void 커넥션_풀_대기는_Hikari의_대기_스레드_수로_본다() throws Exception {
+        // 풀(최대 10개)을 모두 잡은 채 다른 스레드가 커넥션을 기다리게 만든다
+        HikariDataSource hikari = dataSource.unwrap(HikariDataSource.class);
+        List<Connection> held = new ArrayList<>();
+        ExecutorService waiter = Executors.newSingleThreadExecutor();
+        try {
+            assertThat(poolStatus.hasThreadsAwaitingConnection()).isFalse();
+            for (int i = 0; i < hikari.getMaximumPoolSize(); i++) {
+                held.add(dataSource.getConnection());
+            }
+            Future<?> waiting = waiter.submit(() -> {
+                try (Connection ignored = dataSource.getConnection()) {
+                    return null;
+                }
+            });
+            long deadline = System.nanoTime() + Duration.ofSeconds(3).toNanos();
+            while (!poolStatus.hasThreadsAwaitingConnection() && System.nanoTime() < deadline) {
+                Thread.sleep(20);
+            }
+            assertThat(poolStatus.hasThreadsAwaitingConnection()).isTrue();
+
+            held.removeFirst().close();                 // 하나를 돌려주면 기다리던 스레드가 가져간다
+            waiting.get(5, TimeUnit.SECONDS);
+            assertThat(poolStatus.hasThreadsAwaitingConnection()).isFalse();
+        } finally {
+            for (Connection connection : held) {
+                connection.close();
+            }
+            waiter.shutdownNow();
+        }
     }
 
     @Test
