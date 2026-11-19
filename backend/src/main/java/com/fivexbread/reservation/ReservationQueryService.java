@@ -21,6 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ReservationQueryService {
 
+    /** 커밋 여부 확인 조회의 트랜잭션 시간 제한 (decisions.md 6장 "예약 DB 실패 뒤 보상 판단") */
+    static final int COMMIT_CHECK_TIMEOUT_SECONDS = 2;
+
     private final ReservationListRepository reservationListRepository;
     private final ReservationRepository reservationRepository;
     private final Clock clock;
@@ -53,8 +56,10 @@ public class ReservationQueryService {
     /**
      * Idempotency-Key 로 이미 커밋된 예약을 예약 생성 응답(201) 모양으로 (ReservationFacade 의 DB 실패 뒤 확인).
      * 항목·이름·시각을 모두 DB 에서 다시 읽어, 같은 키 재요청이 받는 저장된 응답과 똑같다. 남의 키면 없는 것으로 본다.
+     * 시간 제한 2초: 이 조회는 DB 가 느리거나 끊긴 직후에 불린다. 기본(8초)만큼 기다리지 않고, 못 읽으면 Facade 가 보상한다.
+     * 풀에서 커넥션을 기다리는 시간(Hikari 10초)은 이 제한에 들어가지 않는다.
      */
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, timeout = COMMIT_CHECK_TIMEOUT_SECONDS)
     public Optional<ReservationResponse> findCreated(long memberId, String idempotencyKey) {
         return reservationRepository.findByIdempotencyKey(idempotencyKey)
                 .filter(reservation -> reservation.getMemberId() == memberId)

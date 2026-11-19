@@ -1,6 +1,7 @@
 package com.fivexbread.common;
 
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
@@ -8,6 +9,9 @@ import org.slf4j.MDC;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.dao.RecoverableDataAccessException;
+import org.springframework.dao.TransientDataAccessResourceException;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
@@ -16,6 +20,7 @@ import org.springframework.lang.Nullable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.transaction.CannotCreateTransactionException;
+import org.springframework.transaction.TransactionTimedOutException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -34,12 +39,27 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final String PROBLEM_TYPE_BASE = "https://bakery.example/problems/";
 
+    // Retry-After(초). 503 은 저장소가 돌아올 시간(재시작·장애 전환은 수 초), 409 LOCK_CONFLICT 는 바로 다시 보내면 대개 성공한다.
+    // 예외가 직접 넣은 Retry-After(요청 제한·로그인 잠금)가 있으면 그것을 쓴다 (decisions.md 6장 "Retry-After")
+    static final long SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS = 5;
+    static final long LOCK_CONFLICT_RETRY_AFTER_SECONDS = 1;
+
+    // Redis 가 명령을 받았지만 지금은 처리할 수 없다는 오류. 기다리면 풀리는 상태라 장애(503)로 본다.
+    // READONLY: 복제본으로 장애 전환 중, OOM: maxmemory 초과(noeviction), LOADING: 재시작 뒤 데이터 적재 중, BUSY: 긴 Lua 실행 중.
+    // 그 밖의 오류(WRONGTYPE, Lua 문법 오류 등)는 코드 결함이라 500 으로 둔다
+    private static final List<String> REDIS_UNAVAILABLE_PREFIXES = List.of("READONLY", "OOM", "LOADING", "BUSY");
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<Object> handleBusiness(BusinessException ex, WebRequest request) {
         ErrorCode errorCode = ex.getErrorCode();
         ProblemDetail problem = problemOf(errorCode, errorCode.getStatus(), ex.getDetail(), request);
         ex.getProperties().forEach(problem::setProperty);
-        return ResponseEntity.status(errorCode.getStatus()).headers(ex.getHeaders()).body(problem);
+        HttpHeaders headers = new HttpHeaders();
+        headers.addAll(ex.getHeaders());
+        if (!headers.containsKey(HttpHeaders.RETRY_AFTER)) {
+            addDefaultRetryAfter(errorCode, headers);
+        }
+        return ResponseEntity.status(errorCode.getStatus()).headers(headers).body(problem);
     }
 
     // 메서드 보안(@PreAuthorize)이 던지는 예외. 아래 Exception 핸들러에 잡혀 500이 되지 않게 먼저 처리
@@ -57,12 +77,25 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     // Redis: 예약을 503으로 중단한다. 복구되면 재고 키를 DB 기준으로 다시 채운다. 끊긴 연결로 보낸 명령은 재연결을 기다리다
     //   시간 초과로 끝나므로 QueryTimeoutException 도 같은 장애다 (RedisConnectionFailureException 은 DataAccessResourceFailureException)
     // MySQL: 트랜잭션을 열 때 커넥션이 끊겨 있으면 CannotCreateTransactionException, 쿼리 중 끊기면
-    //   DataAccessResourceFailureException(CannotGetJdbcConnectionException 포함)이다. 재시작 실험에서 500 으로 나가던 것을 503 으로 맞춘다
+    //   DataAccessResourceFailureException(CannotGetJdbcConnectionException 포함)이다. 재시작 실험에서 500 으로 나가던 것을 503 으로 맞춘다.
+    //   드라이버가 "다시 연결하면 될 수 있다"고 알린 것(SQLRecoverableException → RecoverableDataAccessException,
+    //   SQLTransientConnectionException 등 → TransientDataAccessResourceException)도 같은 장애다.
+    // 트랜잭션 시간 제한(spring.transaction.default-timeout 8초) 초과도 DB 가 느린 것이라 503 이다
     @ExceptionHandler({DataAccessResourceFailureException.class, QueryTimeoutException.class,
-            CannotCreateTransactionException.class})
+            CannotCreateTransactionException.class, RecoverableDataAccessException.class,
+            TransientDataAccessResourceException.class, TransactionTimedOutException.class})
     public ResponseEntity<Object> handleStoreDown(Exception ex, WebRequest request) {
         log.error("저장소 연결 실패 또는 시간 초과", ex);
         return respond(ErrorCode.SERVICE_UNAVAILABLE, request);
+    }
+
+    @ExceptionHandler(RedisSystemException.class)
+    public ResponseEntity<Object> handleRedisError(RedisSystemException ex, WebRequest request) {
+        if (isRedisUnavailable(ex)) {
+            log.error("Redis 가 명령을 처리할 수 없는 상태", ex);
+            return respond(ErrorCode.SERVICE_UNAVAILABLE, request);
+        }
+        return handleUnexpected(ex, request);
     }
 
     // DB 데드락(1213)·락 대기 초과(1205, innodb_lock_wait_timeout 5초). 다시 보내면 대개 성공하는 일시적 충돌이라
@@ -110,7 +143,34 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     private ResponseEntity<Object> respond(ErrorCode errorCode, WebRequest request) {
         ProblemDetail problem = problemOf(errorCode, errorCode.getStatus(), null, request);
-        return ResponseEntity.status(errorCode.getStatus()).body(problem);
+        HttpHeaders headers = new HttpHeaders();
+        addDefaultRetryAfter(errorCode, headers);
+        return ResponseEntity.status(errorCode.getStatus()).headers(headers).body(problem);
+    }
+
+    private static void addDefaultRetryAfter(ErrorCode errorCode, HttpHeaders headers) {
+        switch (errorCode) {
+            case SERVICE_UNAVAILABLE -> headers.set(HttpHeaders.RETRY_AFTER,
+                    String.valueOf(SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS));
+            case LOCK_CONFLICT -> headers.set(HttpHeaders.RETRY_AFTER, String.valueOf(LOCK_CONFLICT_RETRY_AFTER_SECONDS));
+            default -> {
+            }
+        }
+    }
+
+    // 원인 사슬의 Redis 오류 응답(io.lettuce.core.RedisCommandExecutionException 등)이 오류 코드로 시작하는지 본다.
+    // Lua 안의 redis.call 이 실패해도 Redis 7 은 원래 오류 코드를 그대로 돌려준다
+    static boolean isRedisUnavailable(Throwable ex) {
+        for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+            String message = cause.getMessage();
+            if (message != null && REDIS_UNAVAILABLE_PREFIXES.stream().anyMatch(message::startsWith)) {
+                return true;
+            }
+            if (cause.getCause() == cause) {
+                break;
+            }
+        }
+        return false;
     }
 
     private static ProblemDetail problemOf(

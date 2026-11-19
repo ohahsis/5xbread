@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # infra/nginx/retry-check.sh : nginx.conf 의 재시도(proxy_next_upstream) 동작 확인 (decisions.md 6장 "Nginx 재시도")
-# 실행(레포 루트에서): ./infra/nginx/retry-check.sh   → 하나라도 기대와 다르면 exit 1. 필요한 것: Docker, nginx:1.27 이미지
+# 실행(레포 루트에서): ./infra/nginx/retry-check.sh   → 하나라도 기대와 다르면 exit 1. 필요한 것: Docker, nginx:1.27.5 이미지 (frontend/Dockerfile 과 같은 버전)
 #
 # 실제 nginx.conf 를 그대로 띄우고, app1~3 자리에 "요청을 받고 응답 없이 연결을 끊는" 가짜 앱(nginx return 444)을 둔다.
 # 앱이 요청을 받은 뒤 죽은 상황이다. Nginx 가 다음 앱으로 다시 보내면 가짜 앱들이 받은 횟수가 2가 된다.
-# - 재발급 PUT·비밀번호 변경 PUT·탈퇴 DELETE: proxy_next_upstream off → 1번
-# - 다른 PUT(대조군): 멱등으로 보고 다시 보냄 → 2번 (proxy_next_upstream_tries 2)
+# - 재발급 PUT·비밀번호 변경 PUT·탈퇴 DELETE·판매일 설정 PUT·수량 저장 PUT: proxy_next_upstream off → 1번
+# - GET(대조군): 멱등으로 보고 다시 보냄 → 2번 (proxy_next_upstream_tries 2). 이제 PUT 은 모두 꺼져 있어 GET 으로 본다
 # - POST(대조군): 앱에 보낸 뒤에는 다시 보내지 않음 → 1번
-# max_fails=1 이라 실패한 앱은 10초 빠지므로, 경우마다 Nginx 를 새로 띄워 상태를 지운다
+# 실패 횟수(max_fails)가 Nginx 에 남으므로, 경우마다 Nginx 를 새로 띄워 상태를 지운다
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
-IMAGE=nginx:1.27
+IMAGE=nginx:1.27.5
 NET="retry-check-$$"
 STUB_CONF=$(mktemp)
 trap 'docker rm -f $(docker ps -aq --filter "label=retry-check=$$") >/dev/null 2>&1 || true; docker network rm "$NET" >/dev/null 2>&1 || true; rm -f "$STUB_CONF"' EXIT
@@ -74,8 +74,10 @@ check PUT    /api/v1/auth/tokens/current        1
 check DELETE /api/v1/auth/tokens/current        1
 check PUT    /api/v1/members/me/password        1
 check DELETE /api/v1/members/me                 1
-check PUT    /api/v1/admin/sale-dates/2026-12-01 2   # 대조군: 다른 PUT 은 다시 보낸다
-check POST   /api/v1/auth/tokens                1   # 대조군: POST 는 다시 보내지 않는다
+check PUT    /api/v1/admin/sale-dates/2026-12-01        1
+check PUT    /api/v1/admin/sale-dates/2026-12-01/stocks 1
+check GET    /api/v1/sale-dates                         2   # 대조군: GET 은 다시 보낸다
+check POST   /api/v1/auth/tokens                        1   # 대조군: POST 는 다시 보내지 않는다
 
 if [[ $FAILED -ne 0 ]]; then
   echo "결과: 실패"

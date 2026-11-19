@@ -10,7 +10,6 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -19,8 +18,9 @@ import org.springframework.stereotype.Component;
  * 1. 요청 제한 429 → 2. Idempotency SET NX (처리 중 409, 지문 불일치 422, 성공한 요청이면 저장된 201)
  * 3. 업무 규칙 404·422 → 4. Redis Lua 검사·차감 (하루 건수 422, 잔여·1인 한도 409)
  * 5. 예약번호 → 6. DB 트랜잭션 → 7. 커밋 후 처리(afterCommit)
- * 6이 실패하면 4를 보상한다. 다만 원인을 모르는 실패(시간 초과·연결 끊김 등)는 커밋됐을 수 있어, 같은 키의 예약이
- * DB 에 있으면 보상하지 않고 그 예약을 201 로 돌려준다 (decisions.md 6장 "예약 DB 실패 뒤 보상 판단").
+ * 5·6이 실패하면 4를 보상한다. 6의 실패는 ReservationDbFailure 로 나눈다: 커넥션을 못 얻음·롤백 확실이면 바로 보상하고,
+ * 원인을 모르는 실패(시간 초과·연결 끊김 등)는 커밋됐을 수 있어 같은 키의 예약이 DB 에 있으면 보상하지 않고 그 예약을 201 로
+ * 돌려준다 (decisions.md 6장 "예약 DB 실패 뒤 보상 판단").
  * 3 이후 어디서든 실패하면 Idempotency 키를 지워 같은 키로 다시 시도할 수 있게 한다.
  *
  * mode=db-only(v1, 비교 측정용)는 4와 보상을 건너뛰고 6에서 재고·한도 검사를 DB 로 한다(ReservationTxService.createDbOnly).
@@ -39,6 +39,7 @@ public class ReservationFacade {
     private final ReservationTxService txService;
     private final ReservationQueryService queryService;
     private final ReservationProperties properties;
+    private final ConnectionPoolStatus poolStatus;
 
     /** 201 응답. body 는 처음이면 ReservationResponse, 같은 키 재요청이면 저장된 JSON */
     public record Created(String location, Object body) {
@@ -67,39 +68,69 @@ public class ReservationFacade {
     }
 
     private ReservationResponse saveOrCompensate(ReservationPlan plan, String generation, String idempotencyKey) {
+        // 예약번호(Redis INCR, 키가 없으면 DB 조회)는 트랜잭션 전이다. 실패하면 DB 에 쓴 것이 없으니 커밋 여부를 볼 필요가 없다
+        String reservationNo;
         try {
-            return txService.create(plan, numbers.next(plan.saleDate()), idempotencyKey);
-        } catch (StockShortageException e) {
-            log.error("Redis 와 DB 잔여가 어긋남: Redis 차감은 통과했지만 DB 조건부 UPDATE 0행 saleDate={} breadIds={}",
-                    plan.saleDate(), e.breadIds());
-            compensate(plan, generation);
-            throw ReservationStockStore.outOfStock(e.breadIds().stream()
-                    .map(breadId -> new StockFailure(breadId, "OUT_OF_STOCK", 0))
-                    .toList());
-        } catch (DataIntegrityViolationException e) {
-            compensate(plan, generation);
-            throw idempotencyConflict(e);
-        } catch (BusinessException | PessimisticLockingFailureException e) {
-            // 트랜잭션 안의 업무 판단(탈퇴 401, DB 한도 재검사 422·409)과 락 실패(데드락·락 대기 초과 → 409 LOCK_CONFLICT).
-            // 롤백이 확실해 커밋 여부를 볼 필요가 없다. 락이 몰린 순간에 조회 쿼리를 더 얹지 않는다
-            compensate(plan, generation);
-            throw e;
+            reservationNo = numbers.next(plan.saleDate());
         } catch (RuntimeException e) {
-            Optional<ReservationResponse> committed = findCommitted(plan, idempotencyKey);
-            if (committed.isPresent()) {
-                log.warn("예약 DB 호출이 실패했지만 커밋돼 있어 보상하지 않음 reservationId={} saleDate={} memberId={}",
-                        committed.get().reservationId(), plan.saleDate(), plan.memberId(), e);
-                return committed.get();
-            }
             compensate(plan, generation);
             throw e;
         }
+
+        try {
+            return txService.create(plan, reservationNo, idempotencyKey);
+        } catch (RuntimeException e) {
+            ReservationDbFailure failure = ReservationDbFailure.classify(e);
+            if (failure == ReservationDbFailure.UNKNOWN && !poolBusy(plan)) {
+                Optional<ReservationResponse> committed = findCommitted(plan, idempotencyKey);
+                if (committed.isPresent()) {
+                    log.warn("예약 DB 호출이 실패했지만 커밋돼 있어 보상하지 않음 reservationId={} saleDate={} memberId={}",
+                            committed.get().reservationId(), plan.saleDate(), plan.memberId(), e);
+                    return committed.get();
+                }
+            }
+            // NO_CONNECTION·ROLLED_BACK 은 조회 없이 보상한다. 커넥션이 모자라거나 락이 몰린 순간에 쿼리를 더 얹지 않는다.
+            // UNKNOWN 이라도 풀에서 기다리는 스레드가 있으면 조회하지 않고 보상한다(poolBusy)
+            compensate(plan, generation);
+            throw toResponseException(plan, e);
+        }
+    }
+
+    /** 보상한 뒤 손님에게 낼 예외. 분류(ReservationDbFailure)와 별개로 응답 코드만 바꾼다 */
+    private static RuntimeException toResponseException(ReservationPlan plan, RuntimeException e) {
+        if (e instanceof StockShortageException shortage) {
+            log.error("Redis 와 DB 잔여가 어긋남: Redis 차감은 통과했지만 DB 조건부 UPDATE 0행 saleDate={} breadIds={}",
+                    plan.saleDate(), shortage.breadIds());
+            return ReservationStockStore.outOfStock(shortage.breadIds().stream()
+                    .map(breadId -> new StockFailure(breadId, "OUT_OF_STOCK", 0))
+                    .toList());
+        }
+        if (e instanceof DataIntegrityViolationException integrity) {
+            return idempotencyConflict(integrity);
+        }
+        return e;
+    }
+
+    /**
+     * 풀에서 커넥션을 기다리는 스레드가 있으면 커밋 확인 조회도 최대 Hikari 대기(10초)를 더 기다린다. 조회 시간 제한(2초)은
+     * 커넥션을 얻은 뒤부터라 이 대기를 막지 못한다. 그래서 조회하지 않고 커밋되지 않은 것으로 보고 보상한다.
+     * 실제로 커밋됐다면 Redis 가 느슨해질 뿐이다(findCommitted 의 조회 실패와 같음).
+     */
+    private boolean poolBusy(ReservationPlan plan) {
+        if (!poolStatus.hasThreadsAwaitingConnection()) {
+            return false;
+        }
+        log.warn("예약 DB 결과를 모르지만 커넥션 풀 대기가 있어 커밋 확인 없이 보상 saleDate={} memberId={}",
+                plan.saleDate(), plan.memberId());
+        return true;
     }
 
     /**
      * 커밋 응답을 받기 전에 끊긴 경우(시간 초과 등) 실제로는 커밋됐을 수 있다. 그대로 보상하면 Redis 잔여·user_qty 가
      * DB 보다 느슨해져 다음 예약들이 Redis 를 통과한 뒤 DB 에서 막힌다. 그래서 같은 키의 예약을 DB 에서 다시 읽는다.
-     * 조회도 실패하면(DB 장애) 커밋되지 않은 것으로 보고 보상한다. 틀려도 Redis 가 느슨해질 뿐, 재고는 조건부 UPDATE 가,
+     * 이 조회는 트랜잭션 시간 제한 2초다(ReservationQueryService.findCreated). "결과 모름"은 대개 DB 가 느리거나 끊긴 때라
+     * 기본 8초를 쓰면 대기가 다시 길어진다.
+     * 조회도 실패하면(DB 장애·2초 초과) 커밋되지 않은 것으로 보고 보상한다. 틀려도 Redis 가 느슨해질 뿐, 재고는 조건부 UPDATE 가,
      * 하루 건수·1인 한도는 트랜잭션 안의 DB 재검사가 막는다.
      */
     private Optional<ReservationResponse> findCommitted(ReservationPlan plan, String idempotencyKey) {

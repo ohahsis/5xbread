@@ -1,5 +1,6 @@
 package com.fivexbread.member;
 
+import com.fivexbread.common.BatchTransaction;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
 import java.time.Clock;
@@ -71,7 +72,7 @@ public class WithdrawalService {
      *
      * @return 지운 행 수
      */
-    @Transactional
+    @Transactional(timeout = BatchTransaction.TIMEOUT_SECONDS)
     public int clearExpiredPhoneHashes(LocalDateTime withdrawnBefore) {
         return jdbcTemplate.update("""
                 UPDATE member SET withdrawn_phone_hash = NULL

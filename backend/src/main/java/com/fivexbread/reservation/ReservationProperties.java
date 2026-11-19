@@ -1,8 +1,11 @@
 package com.fivexbread.reservation;
 
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * 예약 설정값 (부록 B: 설정 파일)
@@ -14,8 +17,10 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param idempotencyProcessingTtl 처리 중 표시(PROCESSING) 보관. 요청 하나를 처리하는 상한보다 길게 (decisions.md 6장 "Idempotency 처리 중 TTL")
  * @param mode                재고·한도 검사 방식. 기본 redis(v2). db-only(v1)는 비교 측정용 (ReservationMode)
  */
+@Validated
 @ConfigurationProperties("fivexbread.reservation")
-public record ReservationProperties(int dailyLimitPerMember, int maxTotalQuantity, int rateLimitPerSecond,
-                                    Duration idempotencyTtl, @DefaultValue("2m") Duration idempotencyProcessingTtl,
-                                    @DefaultValue("redis") ReservationMode mode) {
+public record ReservationProperties(@Positive int dailyLimitPerMember, @Positive int maxTotalQuantity,
+                                    @Positive int rateLimitPerSecond, @NotNull Duration idempotencyTtl,
+                                    @NotNull @DefaultValue("2m") Duration idempotencyProcessingTtl,
+                                    @NotNull @DefaultValue("redis") ReservationMode mode) {
 }
