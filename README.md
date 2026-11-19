@@ -210,7 +210,9 @@ v1은 **재고·한도 검사를 DB로** 하는 방식(`RESERVATION_MODE=db-only
 - **다음 개선으로 남긴 것**: hold 토큰, 같은 키 201 replay, Refresh 회전 유예, 아웃박스 지수 백오프, traceId, 백업·PITR 등 9개(설계 변경이 커서)
 - 자세한 근거: decisions.md 6장 "예약 v2 한도 DB 재검사"·"예약 DB 실패 뒤 보상 판단"·"DB 시간 제한"·"저장소 장애 응답"·"Nginx 재시도", 4장 "다음 개선"
 
-## 1차 범위
+## 진행 상황
+
+### 1차 (완료, 2026-11-16)
 
 decisions.md 4장이 기준입니다. 요약:
 
@@ -219,8 +221,20 @@ decisions.md 4장이 기준입니다. 요약:
 - **배치·복구**: 노쇼 처리(매일 21:00), 트랜잭셔널 아웃박스, 정합성 점검(5분), 모두 ShedLock으로 앱 1개에서만
 - **테스트**: 동시 요청 테스트 포함 JUnit + Testcontainers, E-01~E-15, 시간대 고정 테스트, 앱 3개 스크립트 3종
 
-## 2차로 미룬 것
+### 2차 (완료)
 
-사장님 화면 전체, 손님 화면 나머지(C-08 빵 상세, C-10 비밀번호 변경·이름 수정, C-11 예약 제한 안내, C-05 예정·지난 예약 탭), A-03 수량 복사, A-05 대시보드 집계·실시간 구독·픽업 준비 목록 인쇄 화면, A-10 회원 검색 고도화, A-11 판매 통계, 사진 WEBP 변환, 오래된 데이터 아카이브. (2차에서 완료: 손님 화면 핵심, v1/v2 비교 측정, Prometheus·Grafana와 경고·업무 지표, 아웃박스 dead letter, 장애 실험, AU-07 탈퇴, C-10 이름 수정 API, A-05 판매일 예약 목록·픽업 준비 합계 API, 사장님 예약 상세) 전체 목록과 근거는 decisions.md 4장 "2차로 미룸"에 있습니다.
+| 날짜 | 내용 | PR |
+|---|---|---|
+| 2026-11-17 | 예약 v1/v2 비교 측정, Prometheus·Grafana 메트릭 | [#18](https://github.com/ohahsis/5xbread/pull/18) |
+| 2026-11-17 | 대시보드 경고·업무 지표, 아웃박스 dead letter, 장애 실험 | [#19](https://github.com/ohahsis/5xbread/pull/19) |
+| 2026-11-17 | 손님 화면 핵심(최소 버전) | [#20](https://github.com/ohahsis/5xbread/pull/20) |
+| 2026-11-17 | AU-07 탈퇴, C-10 이름 수정 API, A-05 판매일 예약 목록·픽업 준비 합계 API, 사장님 예약 상세 | [#21](https://github.com/ohahsis/5xbread/pull/21) |
+| 2026-11-17 | 외부 코드 리뷰 반영: DB 시간 제한(Hikari 10초), 락 실패 409 `LOCK_CONFLICT`, 토큰 재발급·비밀번호 변경·탈퇴 Nginx 재시도 끔, 스케줄러 스레드 4개 | [#23](https://github.com/ohahsis/5xbread/pull/23) |
+| 2026-11-17 | 예약 트랜잭션에서 한도 DB 재검사(회원 행 잠금), DB 실패 뒤 커밋 확인 후 보상 | [#24](https://github.com/ohahsis/5xbread/pull/24) |
+| 2026-11-19 | DB 실패 세 가지 분류, 503 + `Retry-After`, 트랜잭션 8초·배치 30초, 판매일·수량 PUT Nginx 재시도 끔, `REDIS_PASSWORD` 필수 + noeviction | [#25](https://github.com/ohahsis/5xbread/pull/25) |
 
-외부 리뷰 뒤 다음 개선으로 남긴 항목(hold 토큰, 같은 키 201 replay, Refresh 회전 유예 등 9개): [decisions.md 4장 "다음 개선"](docs/decisions.md#다음-개선-2차-외부-리뷰에서-이번에-하지-않은-것-2026-11-18)
+### 남은 것
+
+- **화면**: 사장님 화면 전체, 손님 화면 나머지(C-08 빵 상세, C-10 비밀번호 변경·이름 수정, C-11 예약 제한 안내, C-05 예정·지난 예약 탭), A-03 수량 복사, A-05 픽업 준비 목록 인쇄 화면
+- **기능**: A-05 대시보드 집계·실시간 구독, A-10 회원 검색 고도화, A-11 판매 통계, 사진 WEBP 변환, 오래된 데이터 아카이브. 전체 목록과 근거는 decisions.md 4장 "2차로 미룸"
+- **설계 개선**: 외부 리뷰 뒤 다음 개선으로 남긴 항목(hold 토큰, 같은 키 201 replay, Refresh 회전 유예 등 9개): [decisions.md 4장 "다음 개선"](docs/decisions.md#다음-개선-2차-외부-리뷰에서-이번에-하지-않은-것-2026-11-18)
