@@ -223,15 +223,17 @@ decisions.md 4장이 기준입니다. 요약:
 
 ### 2차 (완료)
 
+날짜는 작업 완료일, 머지일은 PR 링크 참고
+
 | 날짜 | 내용 | PR |
 |---|---|---|
-| 2026-11-17 | 예약 v1/v2 비교 측정, Prometheus·Grafana 메트릭 | [#18](https://github.com/ohahsis/5xbread/pull/18) |
+| 2026-11-16 | 예약 v1/v2 비교 측정, Prometheus·Grafana 메트릭 | [#18](https://github.com/ohahsis/5xbread/pull/18) |
 | 2026-11-17 | 대시보드 경고·업무 지표, 아웃박스 dead letter, 장애 실험 | [#19](https://github.com/ohahsis/5xbread/pull/19) |
 | 2026-11-17 | 손님 화면 핵심(최소 버전) | [#20](https://github.com/ohahsis/5xbread/pull/20) |
 | 2026-11-17 | AU-07 탈퇴, C-10 이름 수정 API, A-05 판매일 예약 목록·픽업 준비 합계 API, 사장님 예약 상세 | [#21](https://github.com/ohahsis/5xbread/pull/21) |
 | 2026-11-17 | 외부 코드 리뷰 반영: DB 시간 제한(Hikari 10초), 락 실패 409 `LOCK_CONFLICT`, 토큰 재발급·비밀번호 변경·탈퇴 Nginx 재시도 끔, 스케줄러 스레드 4개 | [#23](https://github.com/ohahsis/5xbread/pull/23) |
 | 2026-11-17 | 예약 트랜잭션에서 한도 DB 재검사(회원 행 잠금), DB 실패 뒤 커밋 확인 후 보상 | [#24](https://github.com/ohahsis/5xbread/pull/24) |
-| 2026-11-19 | DB 실패 세 가지 분류, 503 + `Retry-After`, 트랜잭션 8초·배치 30초, 판매일·수량 PUT Nginx 재시도 끔, `REDIS_PASSWORD` 필수 + noeviction | [#25](https://github.com/ohahsis/5xbread/pull/25) |
+| 2026-11-18 | DB 실패 세 가지 분류, 503 + `Retry-After`, 트랜잭션 8초·배치 30초, 판매일·수량 PUT Nginx 재시도 끔, `REDIS_PASSWORD` 필수 + noeviction | [#25](https://github.com/ohahsis/5xbread/pull/25) |
 
 ### 남은 것
 
