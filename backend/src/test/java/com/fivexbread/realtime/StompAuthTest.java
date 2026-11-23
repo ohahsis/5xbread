@@ -2,8 +2,8 @@ package com.fivexbread.realtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fivexbread.auth.JwtProvider;
-import com.fivexbread.member.Role;
+import com.fivexbread.domain.auth.JwtProvider;
+import com.fivexbread.domain.member.model.enums.Role;
 import com.fivexbread.realtime.StockMessage.Change;
 import com.fivexbread.support.IntegrationTestSupport;
 import com.fivexbread.support.MutableClock;

@@ -1,7 +1,7 @@
 package com.fivexbread.batch;
 
-import com.fivexbread.reservation.NoShowService;
-import com.fivexbread.reservation.NoShowService.Chunk;
+import com.fivexbread.domain.reservation.NoShowService;
+import com.fivexbread.domain.reservation.NoShowService.Chunk;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;

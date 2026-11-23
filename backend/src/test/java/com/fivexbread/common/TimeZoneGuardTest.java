@@ -1,10 +1,11 @@
 package com.fivexbread.common;
 
+import com.fivexbread.config.ClockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fivexbread.admin.AdminAction;
-import com.fivexbread.admin.AdminActionLog;
-import com.fivexbread.admin.AdminActionLogRepository;
+import com.fivexbread.domain.admin.model.enums.AdminAction;
+import com.fivexbread.domain.admin.model.AdminActionLog;
+import com.fivexbread.domain.admin.repository.AdminActionLogRepository;
 import com.fivexbread.support.IntegrationTestSupport;
 import java.time.Clock;
 import java.time.Duration;

@@ -1,0 +1,99 @@
+package com.fivexbread.domain.saledate.repository;
+
+import com.fivexbread.domain.saledate.model.DailyStock;
+import com.fivexbread.domain.saledate.model.vo.BreadQuantity;
+import com.fivexbread.domain.saledate.model.vo.SaleBreadRow;
+import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+public interface DailyStockRepository extends JpaRepository<DailyStock, Long> {
+
+    List<DailyStock> findBySaleDate(LocalDate saleDate);
+
+    /**
+     * 손님 빵 목록 (13-4 카탈로그 쿼리). 판매 중인 빵만, 쿼리 1번이라 N+1 없음.
+     * 잔여는 Redis 에서 읽어 reserved_qty 를 고르지 않는다. 그래도 옵티마이저는 bread 를 먼저 읽어
+     * ix_daily_stock_catalog 커버링을 타지 않는다(decisions.md "C-02 카탈로그 쿼리 실행 계획").
+     * 목록 캐시(SaleCatalogCache)와 예약 규칙 검사가 함께 쓴다. 예약 쪽은 캐시를 거치지 않아 금액이 DB 가격이다.
+     */
+    @Query("""
+            select new com.fivexbread.domain.saledate.model.vo.SaleBreadRow(
+                b.id, b.name, b.price, s.perUserLimit, b.displayOrder)
+            from DailyStock s join Bread b on b.id = s.breadId
+            where s.saleDate = :saleDate and b.active = true
+            order by b.displayOrder, b.id
+            """)
+    List<SaleBreadRow> findSaleBreads(@Param("saleDate") LocalDate saleDate);
+
+    /**
+     * 예약의 DB 최종 방어선 (13-1 6단계, R-02). 현재 읽기 + 행 X락이라 동시에 실행돼도 총량을 넘지 않는다.
+     * uk_daily_stock(sale_date, bread_id) 덕분에 정확히 1행만 잠근다. 0이면 DB 기준 잔여 부족.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE daily_stock SET reserved_qty = reserved_qty + :qty
+            WHERE sale_date = :saleDate AND bread_id = :breadId AND reserved_qty + :qty <= reservable_qty
+            """, nativeQuery = true)
+    int increaseReserved(@Param("saleDate") LocalDate saleDate, @Param("breadId") long breadId, @Param("qty") int qty);
+
+    /** 취소한 수량을 되돌린다 (C-06·A-08, R-15). 0이면 예약 수량보다 많이 빼려는 것 = 데이터 불일치 */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE daily_stock SET reserved_qty = reserved_qty - :qty
+            WHERE sale_date = :saleDate AND bread_id = :breadId AND reserved_qty >= :qty
+            """, nativeQuery = true)
+    int decreaseReserved(@Param("saleDate") LocalDate saleDate, @Param("breadId") long breadId, @Param("qty") int qty);
+
+    /** Redis 재고 키 적재 기준: 잔여 = 예약 가능 총량 − 예약 수량 (decisions.md 6장 "C-04 Redis 재고 적재") */
+    @Query(value = """
+            SELECT bread_id AS breadId, reservable_qty - reserved_qty AS quantity
+            FROM daily_stock WHERE sale_date = :saleDate AND bread_id IN (:breadIds)
+            """, nativeQuery = true)
+    List<BreadQuantity> findRemaining(@Param("saleDate") LocalDate saleDate,
+                                      @Param("breadIds") Collection<Long> breadIds);
+
+    /** 정합성 점검·수량 재계산(N-05, A-12)의 DB 기준 잔여. 그날 수량 행 전부, uk_daily_stock(sale_date, bread_id) 범위 */
+    @Query(value = """
+            SELECT bread_id AS breadId, reservable_qty - reserved_qty AS quantity
+            FROM daily_stock WHERE sale_date = :saleDate ORDER BY bread_id
+            """, nativeQuery = true)
+    List<BreadQuantity> findAllRemaining(@Param("saleDate") LocalDate saleDate);
+
+    /** 이 날 한 손님이 빵별로 예약한 수량(취소 제외, R-03 합산 기준) */
+    @Query(value = """
+            SELECT i.bread_id AS breadId, SUM(i.quantity) AS quantity
+            FROM reservation r JOIN reservation_item i ON i.reservation_id = r.id
+            WHERE r.member_id = :memberId AND r.sale_date = :saleDate AND r.status <> 'CANCELED'
+            GROUP BY i.bread_id
+            """, nativeQuery = true)
+    List<BreadQuantity> sumReservedQuantities(@Param("memberId") long memberId, @Param("saleDate") LocalDate saleDate);
+
+    /**
+     * 총량을 예약 수량보다 줄이지 않는 경우에만 바꾼다 (R-07). 0이면 검사 뒤 그 사이 예약이 들어온 것 → 저장 전체 롤백 후 422.
+     * 조건이 없으면 ck_stock_range(reserved ≤ reservable) 위반 오류가 나고, 조건이 있으면 0행으로 끝난다.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE daily_stock
+            SET produced_qty = :producedQty, reservable_qty = :reservableQty, per_user_limit = :perUserLimit
+            WHERE id = :id AND reserved_qty <= :reservableQty
+            """, nativeQuery = true)
+    int updateIfNotBelowReserved(@Param("id") long id, @Param("producedQty") int producedQty,
+                                 @Param("reservableQty") int reservableQty, @Param("perUserLimit") Integer perUserLimit);
+
+    /** 커밋된 최신 예약 수량. 트랜잭션의 스냅샷이 아니라 잠금 읽기로 본다 (위 UPDATE 가 0행일 때 응답에 넣을 값) */
+    // 공유 잠금이에요. 다른 트랜잭션도 이 행을 읽을 수는 있지만, 바꾸려면 내 트랜잭션이 끝날 때까지 기다려요. 응답에 넣을 숫자를 읽는 동안 값이 또 바뀌지 않게 해요.
+    // 이 트랜잭션은 곧바로 롤백되고 422로 끝나니, 잠금은 아주 잠깐만 유지돼요.
+    // FOR UPDATE 는 읽기만 하면 되는데 다른 트랜잭션의 읽기까지 더 강하게 막아서, 여기서는 FOR SHARE 가 맞다. MySQL 8 이전 문법으로는 LOCK IN SHARE MODE 이다.
+    @Query(value = "SELECT bread_id, reserved_qty FROM daily_stock WHERE id IN (:ids) FOR SHARE", nativeQuery = true)
+    List<Object[]> findCurrentReserved(@Param("ids") Collection<Long> ids);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "DELETE FROM daily_stock WHERE sale_date = :saleDate", nativeQuery = true)
+    int deleteBySaleDate(@Param("saleDate") LocalDate saleDate);
+}

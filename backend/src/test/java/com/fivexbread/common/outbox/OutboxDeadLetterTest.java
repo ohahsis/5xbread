@@ -3,11 +3,11 @@ package com.fivexbread.common.outbox;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fivexbread.auth.JwtProvider;
-import com.fivexbread.member.Role;
-import com.fivexbread.saledate.SaleDateTestData;
-import com.fivexbread.saledate.StockKeys;
-import com.fivexbread.saledate.StockReconciler;
+import com.fivexbread.domain.auth.JwtProvider;
+import com.fivexbread.domain.member.model.enums.Role;
+import com.fivexbread.domain.saledate.SaleDateTestData;
+import com.fivexbread.domain.saledate.StockKeys;
+import com.fivexbread.domain.saledate.StockReconciler;
 import com.fivexbread.support.IntegrationTestSupport;
 import com.fivexbread.support.MutableClock;
 import com.fivexbread.support.MutableClockConfig;
