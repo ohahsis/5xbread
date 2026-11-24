@@ -8,8 +8,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.fivexbread.saledate.StockKeys;
-import com.fivexbread.saledate.StockRedisSync;
+import com.fivexbread.domain.saledate.StockKeys;
+import com.fivexbread.domain.saledate.StockRedisSync;
 import com.fivexbread.support.Concurrently;
 import com.fivexbread.support.IntegrationTestSupport;
 import com.fivexbread.support.MutableClock;

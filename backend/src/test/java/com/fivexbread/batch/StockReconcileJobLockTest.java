@@ -3,7 +3,7 @@ package com.fivexbread.batch;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.fivexbread.saledate.StockReconciler;
+import com.fivexbread.domain.saledate.StockReconciler;
 import com.fivexbread.support.Concurrently;
 import com.fivexbread.support.IntegrationTestSupport;
 import java.util.List;

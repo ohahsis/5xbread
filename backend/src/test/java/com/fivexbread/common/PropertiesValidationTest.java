@@ -2,8 +2,8 @@ package com.fivexbread.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fivexbread.member.SignupProperties;
-import com.fivexbread.reservation.ReservationProperties;
+import com.fivexbread.config.SignupProperties;
+import com.fivexbread.config.ReservationProperties;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;

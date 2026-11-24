@@ -3,10 +3,10 @@ package com.fivexbread.batch;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fivexbread.common.BusinessException;
-import com.fivexbread.reservation.NoShowService;
-import com.fivexbread.reservation.ReservationPickupService;
-import com.fivexbread.saledate.SaleDateTestData;
-import com.fivexbread.saledate.StockKeys;
+import com.fivexbread.domain.reservation.NoShowService;
+import com.fivexbread.domain.reservation.ReservationPickupService;
+import com.fivexbread.domain.saledate.SaleDateTestData;
+import com.fivexbread.domain.saledate.StockKeys;
 import com.fivexbread.support.Concurrently;
 import com.fivexbread.support.IntegrationTestSupport;
 import com.fivexbread.support.MutableClock;

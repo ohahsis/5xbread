@@ -1,0 +1,39 @@
+package com.fivexbread.config;
+
+import net.javacrumbs.shedlock.core.LockProvider;
+import net.javacrumbs.shedlock.provider.redis.spring.RedisLockProvider;
+import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.boot.task.ThreadPoolTaskSchedulerBuilder;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+
+/**
+ * 앱 3개 중 1개만 실행하는 스케줄러 공통 설정 (decisions.md 6장 "ShedLock 공통 설정"). 아웃박스 폴러·정합성 점검도 이 설정을 쓴다.
+ * 작업마다 @SchedulerLock 에 이름과 시간을 직접 적는다. 키는 Redis job-lock:default:{이름}.
+ * 기본값에 lockAtLeastFor 를 두지 않는 이유: 몇 초마다 도는 폴러가 그 시간만큼 멈춘다.
+ * 스케줄러 시각은 서버 시계를 따르므로 주입한 Clock 과 무관하고, 락 시간도 ShedLock 이 실제 시각으로 잰다.
+ */
+@Configuration
+@EnableScheduling
+@EnableSchedulerLock(defaultLockAtMostFor = "PT10M")
+public class SchedulerLockConfig {
+
+    /**
+     * @Scheduled 작업용 스케줄러. Spring Boot 가 자동으로 만들던 것(스레드 1개, scheduling-)을 직접 등록한다.
+     * C-03 의 @EnableWebSocketMessageBroker 가 messageBrokerTaskScheduler 를 만들면 Boot 의 자동 스케줄러가 물러나,
+     * 아웃박스 폴러·노쇼·정합성 점검이 브로커 스케줄러(heartbeat·잔여 묶음 전송)로 옮겨 가 함께 돌게 된다.
+     * 이름이 taskScheduler 라 @Scheduled 는 여러 스케줄러 중 이것을 쓴다. spring.task.scheduling.* 설정은 builder 가 적용한다.
+     */
+    @Bean
+    public ThreadPoolTaskScheduler taskScheduler(ThreadPoolTaskSchedulerBuilder builder) {
+        return builder.build();
+    }
+
+    @Bean
+    public LockProvider lockProvider(RedisConnectionFactory connectionFactory) {
+        return new RedisLockProvider(connectionFactory);
+    }
+}

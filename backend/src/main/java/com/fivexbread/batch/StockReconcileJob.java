@@ -1,6 +1,6 @@
 package com.fivexbread.batch;
 
-import com.fivexbread.saledate.StockReconciler;
+import com.fivexbread.domain.saledate.StockReconciler;
 import lombok.RequiredArgsConstructor;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;

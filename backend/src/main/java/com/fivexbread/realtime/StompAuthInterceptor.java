@@ -1,11 +1,11 @@
 package com.fivexbread.realtime;
 
-import com.fivexbread.auth.AuthMember;
-import com.fivexbread.auth.InvalidTokenException;
-import com.fivexbread.auth.JwtProvider;
+import com.fivexbread.domain.auth.model.vo.AuthMember;
+import com.fivexbread.domain.auth.InvalidTokenException;
+import com.fivexbread.domain.auth.JwtProvider;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
-import com.fivexbread.member.Role;
+import com.fivexbread.domain.member.model.enums.Role;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;

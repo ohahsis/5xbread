@@ -1,6 +1,6 @@
 package com.fivexbread.support;
 
-import com.fivexbread.common.ClockConfig;
+import com.fivexbread.config.ClockConfig;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;

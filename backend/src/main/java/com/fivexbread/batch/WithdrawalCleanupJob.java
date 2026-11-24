@@ -1,7 +1,7 @@
 package com.fivexbread.batch;
 
-import com.fivexbread.member.WithdrawalProperties;
-import com.fivexbread.member.WithdrawalService;
+import com.fivexbread.config.WithdrawalProperties;
+import com.fivexbread.domain.member.WithdrawalService;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;

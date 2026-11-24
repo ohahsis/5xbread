@@ -5,9 +5,9 @@ import static org.assertj.core.api.Assertions.fail;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fivexbread.auth.JwtProvider;
-import com.fivexbread.member.Role;
-import com.fivexbread.saledate.SaleDateTestData;
+import com.fivexbread.domain.auth.JwtProvider;
+import com.fivexbread.domain.member.model.enums.Role;
+import com.fivexbread.domain.saledate.SaleDateTestData;
 import com.fivexbread.support.IntegrationTestSupport;
 import com.fivexbread.support.MutableClock;
 import com.fivexbread.support.MutableClockConfig;
