@@ -29,6 +29,7 @@
 | 항목 | 결정 |
 |---|---|
 | 저장소 구조 | 모노레포. `backend/`(Spring), `frontend/`(손님 화면, React + Vite), `infra/`, `load/`, `docs/` |
+| 패키지 구조 | **정의서 13장 "패키지 구조"(기능별 패키지)와 다르게**(2026-11-24, #27) 역할로 먼저 나눈다. `inbound.controller.{도메인}`(컨트롤러, 아래 `model.request`·`model.response`), `domain.{도메인}`(Facade·Service·업무 규칙, 아래 `model`·`model.enums`·`model.vo`·`repository`), `config`, `common`, `realtime`, `batch`. 이유: 기능별 패키지 하나에 컨트롤러·DTO·설정·엔티티·리포지토리가 하위 패키지 없이 섞여 있었고 파일이 늘어(`reservation` 58개, `saledate` 47개) 역할을 폴더로 구분하기 어려웠다. HTTP 입구와 설정을 업무 코드와 떼어 파일을 둘 자리를 정했다. `batch`·`realtime`은 입출력에 가까워 `domain` 밖에 둔다. 대가: 한 기능을 고칠 때 한 폴더만 보면 되는 장점(정의서의 이유)이 줄고, 패키지가 갈라져 package-private이던 일부 타입·멤버가 public이 됐다. 알려진 한계: `domain`과 `inbound`가 서로 의존한다(4장 "다음 개선"의 구조 분리) |
 | 로컬 인프라 | `compose.yaml`: MySQL·Redis만. 앱은 IDE에서 실행. Spring Docker Compose Support가 접속 정보를 자동 연결 (`spring.docker.compose.file=../compose.yaml`). 자동 연결은 `application.yml`의 URL·비밀번호를 쓰지 않으므로(2026-11-18 확인) MySQL은 라벨 `org.springframework.boot.jdbc.parameters`로 운영과 같은 시간 제한·락 대기를 붙이고(Flyway도 이 URL이라 local만 socketTimeout이 붙음), Redis는 비밀번호를 넘기지 못해 `org.springframework.boot.ignore`로 자동 연결을 끄고 `spring.data.redis.*`(localhost + `REDIS_PASSWORD`)를 쓴다 |
 | 앱 3개 구성 | `compose.full.yaml`: MySQL·Redis(compose.yaml과 같은 설정 + healthcheck)·app1~3(같은 이미지 `backend/Dockerfile`)·Nginx(설정 `infra/nginx/nginx.conf`, 이미지 `frontend/Dockerfile` = 손님 화면 빌드 결과를 넣은 nginx:1.27.5). 프로젝트 이름 `fivexbread-full`·볼륨을 개발용과 나누고 MySQL·Redis 포트는 열지 않아, 두 환경을 함께 띄워도 데이터·포트가 섞이지 않는다. 앱은 `docker` 프로필(아래 6장 "앱 3개 docker 프로필") |
 | 비밀 값 | `.env`(git 제외)에 두고 `.env.example`에 키 이름만 커밋 |
@@ -159,7 +160,7 @@ MySQL 컨테이너는 `--default-time-zone=+09:00`, 문자셋은 `utf8mb4`로 �
 | traceId (Micrometer Tracing) | 오류 응답의 `traceId`는 MDC에 값이 없으면 새로 만든 16자리라 로그와 이어지지 않는다(`ApiExceptionHandler`) | `micrometer-tracing-bridge-otel`을 넣어 요청마다 traceId를 MDC·로그 패턴·응답에 같은 값으로 |
 | 백업·PITR | MySQL 볼륨 하나뿐, 백업 없음 | 매일 `mysqldump`(또는 xtrabackup) + binlog 보관으로 시점 복구. Redis는 AOF가 있고 재고는 DB 기준으로 다시 채운다 |
 | Lettuce `REJECT_COMMANDS` | Redis 연결이 끊기면 Lettuce가 명령을 쌓아 두었다가 시간 제한(2초)에 실패한다. 재연결 뒤 밀린 명령이 늦게 실행될 수 있다(6장 "장애 실험" 발견 ①) | `ClientOptions.disconnectedBehavior(REJECT_COMMANDS)`로 끊긴 동안 바로 실패(503)시킨다. 재시도·응답 시간 측정을 다시 해야 한다 |
-| 구조 분리 (`ReservationWriter`·ArchUnit) | `ReservationFacade`가 순서·보상·커밋 확인을 모두 가진다. 계층 규칙(트랜잭션 안 Redis 호출 금지 등)은 리뷰로만 지킨다 | 보상·커밋 확인을 `ReservationWriter`로 떼어 내고, ArchUnit 테스트로 "Service는 Redis를 부르지 않는다", "Controller는 엔티티를 반환하지 않는다"를 검사 |
+| 구조 분리 (`ReservationWriter`·ArchUnit) | `ReservationFacade`가 순서·보상·커밋 확인을 모두 가진다. 계층 규칙(트랜잭션 안 Redis 호출 금지 등)은 리뷰로만 지킨다. `domain`이 `inbound` DTO를 import함(27개 파일, 2026-11-24, 2장 "패키지 구조") | 보상·커밋 확인을 `ReservationWriter`로 떼어 내고, ArchUnit 테스트로 "Service는 Redis를 부르지 않는다", "Controller는 엔티티를 반환하지 않는다"를 검사. 서비스는 도메인 타입을 반환하고 컨트롤러가 DTO로 변환하며, ArchUnit으로 의존 방향(`domain`은 `inbound`를 import하지 않음)도 검사 |
 
 ---
 
@@ -358,3 +359,4 @@ MySQL 컨테이너는 `--default-time-zone=+09:00`, 문자셋은 `utf8mb4`로 �
 | 2026-11-17 | 6장: 외부 코드 리뷰 반영. 스케줄러 스레드 수·DB 시간 제한(socketTimeout 10초, 락 대기 5초, Hikari 10초, 배치 쿼리 10초 한계)·readiness 프로브(db 포함, 공통 설정)·DB 락 실패 응답(409 `LOCK_CONFLICT`)·A-02 잠금 순서(breadId)·개발 compose 포트(127.0.0.1) 추가. 앱 3개 docker 프로필(기본 프로필 제거)·Nginx 재시도(재발급·비밀번호 변경·탈퇴는 다시 보내지 않음)·Idempotency 처리 중 TTL(Hikari 대기) 갱신. Hikari 대기는 3초 → 부하 테스트 503 36건 → 10초 |
 | 2026-11-17 | 6장: 예약 v2 한도 DB 재검사(회원 행 잠금 뒤 하루 건수·1인 한도, 거절 카운터·Grafana 패널)·예약 DB 실패 뒤 보상 판단(커밋 확인 후 201, `RESERVE` 시간 초과 한계) 추가. C-06·N-05 user_qty 범위의 "항상 더 엄격한 쪽" 서술, C-04 Idempotency 저장, 예약 측정 모드 갱신. 4장: 2차에 hold 토큰 방식 |
 | 2026-11-18 | 2차 외부 리뷰 1단계. 2장: 로컬 인프라(Docker Compose 자동 연결이 URL·비밀번호를 쓰지 않음, 라벨로 맞춤), Redis 비밀번호·메모리(`REDIS_PASSWORD` 필수, noeviction) 추가, nginx:1.27.5. 4장: "다음 개선" 신설(이번에 하지 않은 9개), hold 토큰 줄을 옮김. 6장: 예약 DB 실패 뒤 보상 판단(실패 분류 3가지, 예약번호 실패 분리, 커밋 확인 조회 2초)·Idempotency 처리 중 TTL(처리 상한 서술 바로잡음)·DB 시간 제한(트랜잭션 8초, 배치 30초, Flyway URL 분리)·Nginx 재시도(판매일·수량 PUT 재시도 끔, If-Match 서술 바로잡음, max_fails 3, resolve)·DB 락 실패 응답(Retry-After) 갱신, 저장소 장애 응답 추가 |
+| 2026-11-24 | 2장: 패키지 구조(정의서 13장의 기능별 패키지 대신 inbound·domain·config 등 역할별, #27) 추가. 4장: "다음 개선"의 구조 분리에 `domain` → `inbound` 의존(27개 파일) 추가 |

@@ -38,7 +38,7 @@ Java 21, Spring Boot 3.5.16, Gradle 8.14(Kotlin DSL), MySQL 8, Redis 7, Flyway, 
    k6 (load/*.sh) → Nginx :8081 (X-Upstream으로 앱별 집계)
 ```
 
-**예약 한 건의 흐름** (`reservation` 패키지, Controller → Facade → Service → Domain → Repository)
+**예약 한 건의 흐름** (`inbound.controller.reservation` → `domain.reservation`, Controller → Facade → Service → Domain → Repository)
 
 1. Redis Lua 한 번으로 모든 빵의 잔여·1인 한도를 검사하고 전부 통과하면 함께 차감 (하나라도 부족하면 아무것도 안 바뀜)
 2. DB 트랜잭션(시간 제한 8초)에서 회원 행을 잠그고 하루 건수·1인 한도를 DB로 다시 검사한 뒤, `reserved_qty + n <= reservable_qty` 조건부 UPDATE와 예약 저장. 트랜잭션 안에서는 Redis를 부르지 않는다
@@ -63,7 +63,14 @@ Java 21, Spring Boot 3.5.16, Gradle 8.14(Kotlin DSL), MySQL 8, Redis 7, Flyway, 
 - `realtime/stockSync.ts`(`StockSync`): 구독 → 오는 메시지는 버퍼 → 목록 조회 → 목록 `version`보다 큰 메시지만 적용
 - `reservation/idempotentSubmit.ts`(`IdempotentSubmitter`): Idempotency-Key를 보낼 내용(판매일·시간대·수량)별로 만든다. 같은 내용 재전송은 같은 키
 
-패키지: `common` `auth` `member` `catalog` `saledate` `reservation` `realtime` `admin` `batch`
+**패키지** (`backend/src/main/java/com/fivexbread`, 도메인: `admin` `auth` `catalog` `member` `reservation` `saledate`)
+
+- `inbound.controller.{도메인}`: 컨트롤러. 요청·응답 DTO는 그 아래 `model.request`, `model.response`
+- `domain.{도메인}`: Facade·Service·Component·업무 규칙·이벤트. 그 아래 `model`(엔티티, `enums`, `vo`), `repository` (해당 타입이 있는 도메인만)
+- `config`: 스프링 설정과 설정값(`*Config`, `*Properties`)
+- `common`: 공통 예외·응답·마스킹, 아웃박스(`common.outbox`)
+- `realtime`: STOMP 인증·재고 발행
+- `batch`: 스케줄 작업
 
 ## 실행
 
