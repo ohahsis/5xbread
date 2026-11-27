@@ -23,12 +23,12 @@ Spring Security + JWT, STOMP WebSocket, Testcontainers
 - 기준 패키지 `com.fivexbread`. {도메인}: admin, auth, catalog, member, reservation, saledate
 - 새 파일 위치 (하위 패키지가 없으면 만든다):
   - 컨트롤러 → `inbound.controller.{도메인}`
-  - 요청 DTO·요청 본문 파서 → `inbound.controller.{도메인}.model.request`
+  - 요청 DTO·요청 본문 파서·요청 DTO를 보는 형식 검증(애너테이션·Validator) → `inbound.controller.{도메인}.model.request`
   - 응답 DTO → `inbound.controller.{도메인}.model.response`
   - Facade·Service·Component·업무 규칙·Validator·이벤트 → `domain.{도메인}` 바로 아래
   - 엔티티·JPA 컨버터 → `domain.{도메인}.model`
   - Enum → `domain.{도메인}.model.enums`
-  - 불변 값(record)·쿼리 프로젝션·커서 → `domain.{도메인}.model.vo`
+  - 불변 값(record)·쿼리 프로젝션·커서, 서비스·Facade의 입력(command)·결과(result) record → `domain.{도메인}.model.vo`. request → command, 결과 → response 변환은 inbound(컨트롤러·DTO)에서 한다
   - Repository → `domain.{도메인}.repository`
   - 업무 설정값 `*Properties`(한도·기간·비밀값 등) → 그 값을 쓰는 `domain.{도메인}` 바로 아래 (아웃박스는 `common.outbox`)
   - 인프라 `@Configuration`과 그 설정값 → `config.{기술}`(`security`, `websocket`, `redis`, `scheduling`, `openapi`). 기술 하나에 묶이지 않는 것(`ClockConfig`)만 `config` 루트. 단 `domain`이 읽는 설정값은 그 도메인에 둔다(예: `JwtProperties` → `domain.auth`)

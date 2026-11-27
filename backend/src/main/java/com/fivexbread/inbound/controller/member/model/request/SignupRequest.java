@@ -2,9 +2,9 @@ package com.fivexbread.inbound.controller.member.model.request;
 
 import com.fivexbread.domain.member.MemberName;
 import com.fivexbread.domain.member.Password;
-import com.fivexbread.domain.member.PasswordExcludesPhone;
 import com.fivexbread.domain.member.Phone;
 import com.fivexbread.domain.member.PhoneValidator;
+import com.fivexbread.domain.member.model.vo.SignupCommand;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
@@ -28,5 +28,9 @@ public record SignupRequest(
             @AssertTrue(message = "필수 약관에 동의해 주세요") boolean terms,
             @AssertTrue(message = "필수 약관에 동의해 주세요") boolean privacy
     ) {
+    }
+
+    public SignupCommand toCommand() {
+        return new SignupCommand(phone, password, name);
     }
 }

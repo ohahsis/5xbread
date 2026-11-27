@@ -9,7 +9,6 @@ import com.fivexbread.domain.member.model.enums.MemberStatus;
 import com.fivexbread.domain.member.model.enums.Role;
 import com.fivexbread.domain.member.repository.MemberAgreementRepository;
 import com.fivexbread.domain.member.repository.MemberRepository;
-import com.fivexbread.inbound.controller.member.model.response.MyInfoResponse;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -80,8 +79,8 @@ public class MemberService {
 
     /** 내 정보 (C-10). 탈퇴한 회원이 남은 Access Token 으로 오면 401 */
     @Transactional(readOnly = true)
-    public MyInfoResponse myInfo(long memberId) {
-        return MyInfoResponse.from(activeMember(memberId));
+    public Member myInfo(long memberId) {
+        return activeMember(memberId);
     }
 
     /**
@@ -89,11 +88,11 @@ public class MemberService {
      * Access Token 에 이름이 없어 토큰을 다시 줄 필요가 없다.
      */
     @Transactional
-    public MyInfoResponse rename(long memberId, String name) {
+    public Member rename(long memberId, String name) {
         if (memberRepository.rename(memberId, name) == 0) {
             throw new BusinessException(ErrorCode.UNAUTHENTICATED);
         }
-        return MyInfoResponse.from(activeMember(memberId));     // UPDATE 전에 읽어 둔 엔티티가 없어 바뀐 이름이 읽힌다
+        return activeMember(memberId);     // UPDATE 전에 읽어 둔 엔티티가 없어 바뀐 이름이 읽힌다
     }
 
     private Member activeMember(long memberId) {

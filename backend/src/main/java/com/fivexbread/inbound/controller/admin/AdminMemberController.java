@@ -1,18 +1,18 @@
 package com.fivexbread.inbound.controller.admin;
 
-import com.fivexbread.inbound.controller.admin.model.response.AdminMemberResponse;
-import com.fivexbread.inbound.controller.admin.model.request.MemberPatch;
-import com.fivexbread.inbound.controller.admin.model.request.MemberPatchBody;
 import com.fivexbread.domain.admin.ReservationBlockService;
 import com.fivexbread.domain.admin.TemporaryPasswordFacade;
+import com.fivexbread.inbound.controller.admin.model.request.MemberPatch;
+import com.fivexbread.inbound.controller.admin.model.request.MemberPatchBody;
+import com.fivexbread.inbound.controller.admin.model.response.AdminMemberResponse;
 import com.fivexbread.inbound.controller.admin.model.response.TemporaryPasswordResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Content;
 import com.fivexbread.domain.auth.model.vo.AuthMember;
-import com.fivexbread.domain.member.model.Member;
 import com.fivexbread.domain.member.MemberService;
 import com.fivexbread.domain.member.Phone;
 import com.fivexbread.domain.member.PhoneValidator;
+import com.fivexbread.domain.member.model.Member;
 import com.fivexbread.inbound.controller.reservation.ReservationController;
 import java.util.List;
 import java.util.Map;
@@ -52,7 +52,7 @@ public class AdminMemberController {
     @ResponseStatus(HttpStatus.CREATED)
     public TemporaryPasswordResponse issueTemporaryPassword(@AuthenticationPrincipal AuthMember admin,
                                                             @PathVariable long memberId) {
-        return temporaryPasswordFacade.issue(admin.memberId(), memberId);
+        return TemporaryPasswordResponse.from(temporaryPasswordFacade.issue(admin.memberId(), memberId));
     }
 
     /** 노쇼 제한 해제 (A-10, R-17). 제한이 없어도 결과가 같으므로 200 */
@@ -61,6 +61,6 @@ public class AdminMemberController {
                                      @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(mediaType = ReservationController.MERGE_PATCH_JSON, schema = @Schema(implementation = MemberPatchBody.class)))
                                      @RequestBody Map<String, Object> body) {
         MemberPatch.requireBlockClear(body);
-        return reservationBlockService.clear(admin.memberId(), memberId);
+        return AdminMemberResponse.from(reservationBlockService.clear(admin.memberId(), memberId));
     }
 }

@@ -1,11 +1,11 @@
 package com.fivexbread.domain.admin;
 
-import com.fivexbread.domain.admin.model.AdminActionLog;
-import com.fivexbread.domain.admin.model.enums.AdminAction;
-import com.fivexbread.domain.admin.repository.AdminActionLogRepository;
-import com.fivexbread.inbound.controller.admin.model.response.AdminMemberResponse;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
+import com.fivexbread.domain.admin.model.AdminActionLog;
+import com.fivexbread.domain.admin.model.enums.AdminAction;
+import com.fivexbread.domain.admin.model.vo.AdminMemberResult;
+import com.fivexbread.domain.admin.repository.AdminActionLogRepository;
 import com.fivexbread.domain.member.model.Member;
 import com.fivexbread.domain.member.repository.MemberRepository;
 import java.time.Clock;
@@ -25,7 +25,7 @@ public class ReservationBlockService {
 
     /** 해제와 이력을 한 트랜잭션에 남긴다. 실제로 지운 경우에만 이력을 쓴다. 활성 손님이 아니면 404 */
     @Transactional
-    public AdminMemberResponse clear(long adminId, long memberId) {
+    public AdminMemberResult clear(long adminId, long memberId) {
         Member member = memberRepository.findById(memberId)
                 .filter(Member::isActiveCustomer)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
@@ -33,6 +33,6 @@ public class ReservationBlockService {
             adminActionLogRepository.save(AdminActionLog.onMember(
                     adminId, AdminAction.RESERVATION_BLOCK_CLEARED, memberId, LocalDateTime.now(clock)));
         }
-        return AdminMemberResponse.from(member).withoutBlock();
+        return AdminMemberResult.blockCleared(member);
     }
 }

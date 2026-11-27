@@ -160,7 +160,7 @@ MySQL 컨테이너는 `--default-time-zone=+09:00`, 문자셋은 `utf8mb4`로 �
 | traceId (Micrometer Tracing) | 오류 응답의 `traceId`는 MDC에 값이 없으면 새로 만든 16자리라 로그와 이어지지 않는다(`ApiExceptionHandler`) | `micrometer-tracing-bridge-otel`을 넣어 요청마다 traceId를 MDC·로그 패턴·응답에 같은 값으로 |
 | 백업·PITR | MySQL 볼륨 하나뿐, 백업 없음 | 매일 `mysqldump`(또는 xtrabackup) + binlog 보관으로 시점 복구. Redis는 AOF가 있고 재고는 DB 기준으로 다시 채운다 |
 | Lettuce `REJECT_COMMANDS` | Redis 연결이 끊기면 Lettuce가 명령을 쌓아 두었다가 시간 제한(2초)에 실패한다. 재연결 뒤 밀린 명령이 늦게 실행될 수 있다(6장 "장애 실험" 발견 ①) | `ClientOptions.disconnectedBehavior(REJECT_COMMANDS)`로 끊긴 동안 바로 실패(503)시킨다. 재시도·응답 시간 측정을 다시 해야 한다 |
-| 구조 분리 (`ReservationWriter`·ArchUnit) | `ReservationFacade`가 순서·보상·커밋 확인을 모두 가진다. 계층 규칙 중 의존 방향과 "트랜잭션 클래스의 Redis 직접 의존"은 2026-11-27부터 ArchUnit이 검사한다(2장 "패키지 구조"). 다만 `domain`이 `inbound` DTO를 import하는 27개 클래스는 허용 목록에 얼려 두었고, 다른 빈을 거친 트랜잭션 안 Redis 호출은 여전히 리뷰로만 지킨다 | 보상·커밋 확인을 `ReservationWriter`로 떼어 내고, ArchUnit 테스트로 "Service는 Redis를 부르지 않는다", "Controller는 엔티티를 반환하지 않는다"를 검사. 서비스는 도메인 타입을 반환하고 컨트롤러가 DTO로 변환하며, ArchUnit으로 의존 방향(`domain`은 `inbound`를 import하지 않음)도 검사 |
+| 구조 분리 (`ReservationWriter`·ArchUnit) | `ReservationFacade`가 순서·보상·커밋 확인을 모두 가진다. 계층 규칙 중 의존 방향과 "트랜잭션 클래스의 Redis 직접 의존"은 2026-11-27부터 ArchUnit이 검사한다(2장 "패키지 구조"). 다만 `domain`이 `inbound` DTO를 import하는 클래스는 허용 목록에 얼려 두었고(처음 27개, catalog·admin·auth·member를 정리해 2026-11-27 기준 19개: reservation 13, saledate 6), 다른 빈을 거친 트랜잭션 안 Redis 호출은 여전히 리뷰로만 지킨다 | 보상·커밋 확인을 `ReservationWriter`로 떼어 내고, ArchUnit 테스트로 "Service는 Redis를 부르지 않는다", "Controller는 엔티티를 반환하지 않는다"를 검사. 서비스는 도메인 타입을 반환하고 컨트롤러가 DTO로 변환하며, ArchUnit으로 의존 방향(`domain`은 `inbound`를 import하지 않음)도 검사 |
 
 ---
 
@@ -362,3 +362,4 @@ MySQL 컨테이너는 `--default-time-zone=+09:00`, 문자셋은 `utf8mb4`로 �
 | 2026-11-24 | 2장: 패키지 구조(정의서 13장의 기능별 패키지 대신 inbound·domain·config 등 역할별, #27) 추가. 4장: "다음 개선"의 구조 분리에 `domain` → `inbound` 의존(27개 파일) 추가 |
 | 2026-11-27 | 2장: 패키지 구조에 config 분리 추가(업무 `*Properties`는 도메인·`common.outbox`로, 인프라 설정은 `config.{기술}`로) |
 | 2026-11-27 | 2장: 패키지 구조에 의존 검사 추가(`JwtProperties`·`CatalogCacheProperties`를 도메인으로, `KST`를 `common.Times`로, ArchUnit 규칙 3개와 허용 목록). 4장: "다음 개선"의 구조 분리 지금 상태 갱신 |
+| 2026-11-27 | 4장: "다음 개선"의 구조 분리에 DTO 역의존 1단계 반영(catalog·admin·auth·member의 서비스·Facade가 command·result를 쓰고 변환은 컨트롤러로, `PasswordExcludesPhone`을 inbound로, 허용 목록 27 → 19개 클래스) |

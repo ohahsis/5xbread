@@ -1,13 +1,13 @@
 package com.fivexbread.domain.admin;
 
-import com.fivexbread.inbound.controller.admin.model.response.TemporaryPasswordResponse;
-import com.fivexbread.domain.auth.LoginFailureCounter;
-import com.fivexbread.domain.auth.RefreshTokenStore;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
-import com.fivexbread.domain.member.model.Member;
+import com.fivexbread.domain.admin.model.vo.IssuedTemporaryPassword;
+import com.fivexbread.domain.auth.LoginFailureCounter;
+import com.fivexbread.domain.auth.RefreshTokenStore;
 import com.fivexbread.domain.member.MemberService;
 import com.fivexbread.domain.member.TemporaryPasswordGenerator;
+import com.fivexbread.domain.member.model.Member;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -27,7 +27,7 @@ public class TemporaryPasswordFacade {
     private final RefreshTokenStore refreshTokenStore;
     private final LoginFailureCounter loginFailureCounter;
 
-    public TemporaryPasswordResponse issue(long adminId, long memberId) {
+    public IssuedTemporaryPassword issue(long adminId, long memberId) {
         Member member = memberService.findById(memberId)
                 .filter(Member::canReceiveTemporaryPassword)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
@@ -37,6 +37,6 @@ public class TemporaryPasswordFacade {
 
         refreshTokenStore.revokeAll(memberId);
         loginFailureCounter.reset(member.getPhone());
-        return new TemporaryPasswordResponse(temporaryPassword);
+        return new IssuedTemporaryPassword(temporaryPassword);
     }
 }

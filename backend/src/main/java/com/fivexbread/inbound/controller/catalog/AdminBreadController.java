@@ -1,9 +1,9 @@
 package com.fivexbread.inbound.controller.catalog;
 
-import com.fivexbread.inbound.controller.catalog.model.request.BreadCreateRequest;
-import com.fivexbread.inbound.controller.catalog.model.response.BreadResponse;
 import com.fivexbread.domain.catalog.BreadService;
+import com.fivexbread.inbound.controller.catalog.model.request.BreadCreateRequest;
 import com.fivexbread.inbound.controller.catalog.model.request.BreadUpdateRequest;
+import com.fivexbread.inbound.controller.catalog.model.response.BreadResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -35,12 +35,12 @@ public class AdminBreadController {
     @PostMapping
     @ApiResponse(responseCode = "201", description = "등록함. Location: /api/v1/admin/breads/{id}")
     public ResponseEntity<BreadResponse> register(@Valid @RequestBody BreadCreateRequest request) {
-        BreadResponse response = BreadResponse.from(breadService.register(request));
+        BreadResponse response = BreadResponse.from(breadService.register(request.toCommand()));
         return ResponseEntity.created(URI.create("/api/v1/admin/breads/" + response.id())).body(response);
     }
 
     @PatchMapping("/{breadId}")
     public BreadResponse update(@PathVariable long breadId, @Valid @RequestBody BreadUpdateRequest request) {
-        return BreadResponse.from(breadService.update(breadId, request));
+        return BreadResponse.from(breadService.update(breadId, request.toCommand()));
     }
 }

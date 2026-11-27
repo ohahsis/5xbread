@@ -1,12 +1,12 @@
 package com.fivexbread.inbound.controller.auth;
 
-import com.fivexbread.inbound.controller.auth.model.response.AccessTokenResponse;
 import com.fivexbread.domain.auth.AuthFacade;
+import com.fivexbread.domain.auth.RefreshTokenCookie;
 import com.fivexbread.domain.auth.model.vo.AuthMember;
 import com.fivexbread.domain.auth.model.vo.IssuedTokens;
 import com.fivexbread.inbound.controller.auth.model.request.PasswordChangeRequest;
-import com.fivexbread.domain.auth.RefreshTokenCookie;
 import com.fivexbread.inbound.controller.auth.model.request.WithdrawalRequest;
+import com.fivexbread.inbound.controller.auth.model.response.AccessTokenResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -35,11 +35,11 @@ public class PasswordController {
     @PutMapping("/api/v1/members/me/password")
     public ResponseEntity<AccessTokenResponse> change(@AuthenticationPrincipal AuthMember member,
                                                       @Valid @RequestBody PasswordChangeRequest request) {
-        IssuedTokens tokens = authFacade.changePassword(member.memberId(), request);
+        IssuedTokens tokens = authFacade.changePassword(member.memberId(), request.currentPassword(), request.newPassword());
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE,
                         RefreshTokenCookie.of(tokens.refreshToken(), tokens.refreshTokenTtl()).toString())
-                .body(tokens.toResponse());
+                .body(AccessTokenResponse.from(tokens));
     }
 
     /**

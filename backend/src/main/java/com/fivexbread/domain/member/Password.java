@@ -10,7 +10,7 @@ import java.lang.annotation.Target;
 
 /**
  * 비밀번호 단일 필드 규칙 (AU-03, 9장 필드 규격): 8~64자, 영문·숫자 각 1자 이상, 허용 문자만, 같은 문자 4연속 불가.
- * 휴대폰 번호 포함 여부는 두 필드를 함께 봐야 해서 {@link PasswordExcludesPhone}이 맡는다.
+ * 휴대폰 번호 포함 여부는 두 필드를 함께 봐야 해서 {@code PasswordExcludesPhone}(가입 요청 검증)이 맡는다.
  * null 은 통과(@NotBlank 와 함께 사용)
  */
 @Documented // Javadoc 을 만들 때 이 어노테이션도 문서에 표시되도록 한다.

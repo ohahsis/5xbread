@@ -1,5 +1,6 @@
-package com.fivexbread.domain.member;
+package com.fivexbread.inbound.controller.member.model.request;
 
+import com.fivexbread.domain.member.PasswordRules;
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
 import java.lang.annotation.Documented;

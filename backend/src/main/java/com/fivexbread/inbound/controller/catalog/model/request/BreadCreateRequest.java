@@ -2,6 +2,7 @@ package com.fivexbread.inbound.controller.catalog.model.request;
 
 import com.fivexbread.domain.catalog.model.enums.Allergen;
 import com.fivexbread.domain.catalog.model.enums.BreadCategory;
+import com.fivexbread.domain.catalog.model.vo.BreadCommand;
 import static com.fivexbread.domain.catalog.BreadRules.*;
 
 import jakarta.validation.constraints.AssertTrue;
@@ -42,5 +43,9 @@ public record BreadCreateRequest(
     @AssertTrue(message = DESCRIPTION_LINES_MESSAGE)
     boolean isDescriptionWithinLineBreaks() {
         return withinLineBreaks(description);
+    }
+
+    public BreadCommand toCommand() {
+        return new BreadCommand(name, category, price, description, allergens, displayOrder, null);
     }
 }

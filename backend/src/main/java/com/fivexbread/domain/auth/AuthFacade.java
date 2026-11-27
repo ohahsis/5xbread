@@ -11,8 +11,6 @@ import com.fivexbread.domain.member.WithdrawnPhoneHasher;
 import com.fivexbread.domain.member.model.Member;
 import com.fivexbread.domain.member.model.enums.MemberStatus;
 import com.fivexbread.domain.member.model.enums.Role;
-import com.fivexbread.inbound.controller.auth.model.request.LoginRequest;
-import com.fivexbread.inbound.controller.auth.model.request.PasswordChangeRequest;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -55,15 +53,14 @@ public class AuthFacade {
         this.dummyHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
-    public IssuedTokens login(LoginRequest request) {
-        String phone = request.phone();
+    public IssuedTokens login(String phone, String password) {
         // 잠겨 있으면 비밀번호가 맞아도 423. 없는 번호도 세야 잠금 여부로 가입 여부를 알 수 없다
         boolean lastAttempt = loginFailureCounter.acquire(phone);
 
         Optional<Member> found = memberService.findByPhone(phone);
         // 없는 번호도 BCrypt 비교를 한 번 해서 응답 시간으로 가입 여부를 알 수 없게 한다
         String hash = found.map(Member::getPasswordHash).orElse(dummyHash);
-        boolean matches = passwordEncoder.matches(request.password(), hash);
+        boolean matches = passwordEncoder.matches(password, hash);
         if (found.isEmpty() || !matches) {
             loginFailureCounter.recordFailure(phone, lastAttempt);   // 잠금을 만든 시도면 423
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
@@ -107,17 +104,16 @@ public class AuthFacade {
      *
      * @throws BusinessException 현재 비밀번호 불일치 422, 잠김 423, 번호 포함·현재와 같음 422
      */
-    public IssuedTokens changePassword(long memberId, PasswordChangeRequest request) {
+    public IssuedTokens changePassword(long memberId, String currentPassword, String newPassword) {
         Member member = memberService.findById(memberId)
                 .filter(m -> m.getStatus() == MemberStatus.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHENTICATED));
-        verifyCurrentPassword(member, request.currentPassword());
+        verifyCurrentPassword(member, currentPassword);
 
-        String newPassword = request.newPassword();
         if (PasswordRules.containsPhone(newPassword, member.getPhone())) {
             throw new BusinessException(ErrorCode.PASSWORD_CONTAINS_PHONE);
         }
-        if (newPassword.equals(request.currentPassword())) {     // 현재 비밀번호는 위에서 확인했으니 BCrypt 를 또 돌리지 않는다
+        if (newPassword.equals(currentPassword)) {     // 현재 비밀번호는 위에서 확인했으니 BCrypt 를 또 돌리지 않는다
             throw new BusinessException(ErrorCode.PASSWORD_SAME_AS_CURRENT);
         }
 
