@@ -1,4 +1,4 @@
-package com.fivexbread.config;
+package com.fivexbread.config.websocket;
 
 import com.fivexbread.realtime.StompAuthInterceptor;
 import com.fivexbread.realtime.StompErrorHandler;

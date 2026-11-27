@@ -1,6 +1,5 @@
 package com.fivexbread.domain.member;
 
-import com.fivexbread.config.SignupProperties;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
 import java.time.Clock;

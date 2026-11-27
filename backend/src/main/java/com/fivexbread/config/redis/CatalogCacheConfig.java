@@ -1,4 +1,4 @@
-package com.fivexbread.config;
+package com.fivexbread.config.redis;
 
 import com.fivexbread.domain.saledate.CatalogCacheEvictor;
 import org.springframework.context.annotation.Bean;

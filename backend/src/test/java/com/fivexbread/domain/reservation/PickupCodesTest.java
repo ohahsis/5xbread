@@ -1,6 +1,5 @@
 package com.fivexbread.domain.reservation;
 
-import com.fivexbread.config.PickupCodeProperties;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 

@@ -1,4 +1,4 @@
-package com.fivexbread.config;
+package com.fivexbread.config.scheduling;
 
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.provider.redis.spring.RedisLockProvider;

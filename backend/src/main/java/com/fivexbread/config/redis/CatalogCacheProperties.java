@@ -1,4 +1,4 @@
-package com.fivexbread.config;
+package com.fivexbread.config.redis;
 
 import jakarta.validation.constraints.NotNull;
 import java.time.Duration;

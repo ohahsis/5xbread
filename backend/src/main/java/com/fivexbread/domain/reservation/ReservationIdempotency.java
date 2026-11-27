@@ -1,6 +1,5 @@
 package com.fivexbread.domain.reservation;
 
-import com.fivexbread.config.ReservationProperties;
 import com.fivexbread.inbound.controller.reservation.model.request.ReservationCreateRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;

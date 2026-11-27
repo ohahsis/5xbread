@@ -1,19 +1,19 @@
 package com.fivexbread.domain.auth;
 
-import com.fivexbread.domain.auth.model.vo.IssuedTokens;
-import com.fivexbread.config.JwtProperties;
-import com.fivexbread.inbound.controller.auth.model.request.LoginRequest;
-import com.fivexbread.inbound.controller.auth.model.request.PasswordChangeRequest;
-import com.fivexbread.domain.auth.RefreshTokenStore.RotatedToken;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
-import com.fivexbread.domain.member.model.Member;
+import com.fivexbread.config.security.JwtProperties;
+import com.fivexbread.domain.auth.RefreshTokenStore.RotatedToken;
+import com.fivexbread.domain.auth.model.vo.IssuedTokens;
 import com.fivexbread.domain.member.MemberService;
-import com.fivexbread.domain.member.model.enums.MemberStatus;
 import com.fivexbread.domain.member.PasswordRules;
-import com.fivexbread.domain.member.model.enums.Role;
 import com.fivexbread.domain.member.WithdrawalService;
 import com.fivexbread.domain.member.WithdrawnPhoneHasher;
+import com.fivexbread.domain.member.model.Member;
+import com.fivexbread.domain.member.model.enums.MemberStatus;
+import com.fivexbread.domain.member.model.enums.Role;
+import com.fivexbread.inbound.controller.auth.model.request.LoginRequest;
+import com.fivexbread.inbound.controller.auth.model.request.PasswordChangeRequest;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;

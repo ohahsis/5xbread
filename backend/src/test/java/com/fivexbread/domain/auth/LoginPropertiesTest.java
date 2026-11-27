@@ -1,6 +1,5 @@
 package com.fivexbread.domain.auth;
 
-import com.fivexbread.config.LoginProperties;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import jakarta.validation.Validation;

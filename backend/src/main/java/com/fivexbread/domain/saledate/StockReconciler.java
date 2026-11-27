@@ -2,7 +2,6 @@ package com.fivexbread.domain.saledate;
 
 import com.fivexbread.domain.saledate.repository.DailyStockRepository;
 import com.fivexbread.domain.saledate.repository.SaleDateRepository;
-import com.fivexbread.config.ReconcileProperties;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;

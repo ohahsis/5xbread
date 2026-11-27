@@ -1,6 +1,6 @@
 package com.fivexbread.batch;
 
-import com.fivexbread.config.WithdrawalProperties;
+import com.fivexbread.domain.member.WithdrawalProperties;
 import com.fivexbread.domain.member.WithdrawalService;
 import java.time.Clock;
 import java.time.LocalDateTime;

@@ -1,7 +1,7 @@
 package com.fivexbread.domain.auth;
 
+import com.fivexbread.config.security.SecurityConfig;
 import com.fivexbread.domain.auth.model.vo.IssuedTokens;
-import com.fivexbread.config.SecurityConfig;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -16,9 +16,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fivexbread.common.ApiExceptionHandler;
-import com.fivexbread.inbound.controller.auth.AuthController;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
+import com.fivexbread.inbound.controller.auth.AuthController;
 import jakarta.servlet.http.Cookie;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;

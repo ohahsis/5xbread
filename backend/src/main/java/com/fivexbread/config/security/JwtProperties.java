@@ -1,4 +1,4 @@
-package com.fivexbread.config;
+package com.fivexbread.config.security;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

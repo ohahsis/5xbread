@@ -1,7 +1,7 @@
 package com.fivexbread.domain.auth;
 
-import com.fivexbread.config.JwtProperties;
 import com.fivexbread.config.ClockConfig;
+import com.fivexbread.config.security.JwtProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;

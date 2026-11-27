@@ -2,7 +2,6 @@ package com.fivexbread.domain.saledate;
 
 import com.fivexbread.domain.saledate.model.SaleDate;
 import com.fivexbread.domain.saledate.model.vo.SaleDateViolation;
-import com.fivexbread.config.StoreProperties;
 import static com.fivexbread.domain.saledate.model.vo.SaleDateViolation.Reason.*;
 
 import com.fivexbread.domain.saledate.model.vo.SaleDateViolation.Reason;

@@ -1,6 +1,5 @@
 package com.fivexbread.domain.member;
 
-import com.fivexbread.config.AdminAccountProperties;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;

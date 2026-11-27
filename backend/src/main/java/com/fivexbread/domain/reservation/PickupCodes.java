@@ -1,6 +1,5 @@
 package com.fivexbread.domain.reservation;
 
-import com.fivexbread.config.PickupCodeProperties;
 import static com.fivexbread.config.ClockConfig.KST;
 
 import java.nio.charset.StandardCharsets;

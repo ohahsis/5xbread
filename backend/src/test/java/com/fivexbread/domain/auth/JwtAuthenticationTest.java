@@ -1,8 +1,8 @@
 package com.fivexbread.domain.auth;
 
+import com.fivexbread.config.security.JwtProperties;
+import com.fivexbread.config.security.SecurityConfig;
 import com.fivexbread.domain.auth.model.vo.AuthMember;
-import com.fivexbread.config.JwtProperties;
-import com.fivexbread.config.SecurityConfig;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;

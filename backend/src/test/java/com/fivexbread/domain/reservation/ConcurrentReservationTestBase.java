@@ -1,7 +1,6 @@
 package com.fivexbread.domain.reservation;
 
 import com.fivexbread.domain.reservation.model.enums.ReservationMode;
-import com.fivexbread.config.ReservationProperties;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;

@@ -67,7 +67,7 @@ Java 21, Spring Boot 3.5.16, Gradle 8.14(Kotlin DSL), MySQL 8, Redis 7, Flyway, 
 
 - `inbound.controller.{도메인}`: 컨트롤러. 요청·응답 DTO는 그 아래 `model.request`, `model.response`
 - `domain.{도메인}`: Facade·Service·Component·업무 규칙·이벤트. 그 아래 `model`(엔티티, `enums`, `vo`), `repository` (해당 타입이 있는 도메인만)
-- `config`: 스프링 설정과 설정값(`*Config`, `*Properties`)
+- `config`: 인프라 설정만. 기술별 `security` `websocket` `redis` `scheduling` `openapi`, 루트에 `ClockConfig`. 업무 설정값(`*Properties`)은 쓰는 도메인(`domain.{도메인}`) 또는 `common.outbox`에 둔다
 - `common`: 공통 예외·응답·마스킹, 아웃박스(`common.outbox`)
 - `realtime`: STOMP 인증·재고 발행
 - `batch`: 스케줄 작업

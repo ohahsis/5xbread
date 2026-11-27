@@ -1,4 +1,4 @@
-package com.fivexbread.config;
+package com.fivexbread.config.websocket;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;

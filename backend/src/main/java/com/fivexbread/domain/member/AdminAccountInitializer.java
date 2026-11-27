@@ -1,6 +1,5 @@
 package com.fivexbread.domain.member;
 
-import com.fivexbread.config.AdminAccountProperties;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.MaskedPhone;
 import java.sql.Connection;

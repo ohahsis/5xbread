@@ -1,6 +1,6 @@
 package com.fivexbread.realtime;
 
-import com.fivexbread.config.RealtimeProperties;
+import com.fivexbread.config.websocket.RealtimeProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fivexbread.realtime.StockMessage.Change;
 import java.io.IOException;

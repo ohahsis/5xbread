@@ -1,6 +1,5 @@
 package com.fivexbread.domain.auth;
 
-import com.fivexbread.config.LoginProperties;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
 import com.fivexbread.common.MaskedPhone;

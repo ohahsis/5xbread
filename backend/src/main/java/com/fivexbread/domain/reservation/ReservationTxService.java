@@ -1,18 +1,17 @@
 package com.fivexbread.domain.reservation;
 
+import com.fivexbread.common.BusinessException;
+import com.fivexbread.common.ErrorCode;
+import com.fivexbread.domain.member.model.enums.MemberStatus;
 import com.fivexbread.domain.reservation.model.Reservation;
 import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
 import com.fivexbread.domain.reservation.model.vo.ReservationPlan;
 import com.fivexbread.domain.reservation.model.vo.StockFailure;
 import com.fivexbread.domain.reservation.repository.ReservationRepository;
-import com.fivexbread.config.ReservationProperties;
-import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse;
-import com.fivexbread.common.BusinessException;
-import com.fivexbread.common.ErrorCode;
-import com.fivexbread.domain.member.model.enums.MemberStatus;
-import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse.ItemResponse;
 import com.fivexbread.domain.saledate.model.vo.BreadQuantity;
 import com.fivexbread.domain.saledate.repository.DailyStockRepository;
+import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse.ItemResponse;
+import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;

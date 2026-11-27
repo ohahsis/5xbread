@@ -1,4 +1,4 @@
-package com.fivexbread.config;
+package com.fivexbread.config.security;
 
 import jakarta.validation.constraints.PositiveOrZero;
 import org.springframework.boot.context.properties.ConfigurationProperties;

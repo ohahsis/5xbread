@@ -7,14 +7,13 @@ import com.fivexbread.domain.saledate.model.vo.SaleDateViolation;
 import com.fivexbread.domain.saledate.repository.DailyStockRepository;
 import com.fivexbread.domain.saledate.repository.PickupSlotRepository;
 import com.fivexbread.domain.saledate.repository.SaleDateRepository;
-import com.fivexbread.config.StoreProperties;
 import com.fivexbread.inbound.controller.saledate.model.request.SaleDateRequest;
 import com.fivexbread.inbound.controller.saledate.model.response.SaleDateResponse;
 import static com.fivexbread.config.ClockConfig.KST;
 
-import com.fivexbread.domain.catalog.CatalogChanged;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
+import com.fivexbread.domain.catalog.CatalogChanged;
 import com.fivexbread.domain.saledate.model.vo.SaleDateViolation.Reason;
 import java.time.Clock;
 import java.time.LocalDate;

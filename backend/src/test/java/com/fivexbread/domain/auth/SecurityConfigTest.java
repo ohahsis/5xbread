@@ -1,6 +1,6 @@
 package com.fivexbread.domain.auth;
 
-import com.fivexbread.config.SecurityConfig;
+import com.fivexbread.config.security.SecurityConfig;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;

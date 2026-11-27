@@ -1,4 +1,4 @@
-package com.fivexbread.config;
+package com.fivexbread.domain.member;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
