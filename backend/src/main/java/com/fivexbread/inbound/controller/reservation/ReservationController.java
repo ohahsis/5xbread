@@ -1,20 +1,20 @@
 package com.fivexbread.inbound.controller.reservation;
 
-import com.fivexbread.inbound.controller.reservation.model.response.PickupCodeResponse;
 import com.fivexbread.domain.reservation.PickupCodeService;
-import com.fivexbread.domain.reservation.model.vo.ReservationActor;
 import com.fivexbread.domain.reservation.ReservationCancelFacade;
-import com.fivexbread.inbound.controller.reservation.model.request.ReservationCreateRequest;
 import com.fivexbread.domain.reservation.ReservationFacade;
+import com.fivexbread.domain.reservation.model.vo.ReservationActor;
+import com.fivexbread.inbound.controller.reservation.model.request.ReservationCreateRequest;
 import com.fivexbread.inbound.controller.reservation.model.request.ReservationPatch;
 import com.fivexbread.inbound.controller.reservation.model.request.ReservationPatchBodies;
+import com.fivexbread.inbound.controller.reservation.model.response.PickupCodeResponse;
 import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Content;
-import com.fivexbread.domain.auth.model.vo.AuthMember;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
+import com.fivexbread.domain.auth.model.vo.AuthMember;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.Locale;
@@ -55,7 +55,8 @@ public class ReservationController {
     public ResponseEntity<Object> create(@AuthenticationPrincipal AuthMember member,
                                          @RequestHeader(name = IDEMPOTENCY_KEY, required = false) String idempotencyKey,
                                          @Valid @RequestBody ReservationCreateRequest request) {
-        ReservationFacade.Created created = reservationFacade.create(member.memberId(), key(idempotencyKey), request);
+        ReservationFacade.Created created = reservationFacade.create(member.memberId(), key(idempotencyKey),
+                request.toCommand(), ReservationResponse::from);
         return ResponseEntity.created(URI.create(created.location())).body(created.body());
     }
 
@@ -65,13 +66,14 @@ public class ReservationController {
                                      @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(mediaType = MERGE_PATCH_JSON, schema = @Schema(implementation = ReservationPatchBodies.CustomerCancel.class)))
                                      @RequestBody Map<String, Object> body) {
         ReservationPatch.customer(body);                    // 형식 검증만. 손님은 CANCELED 하나뿐
-        return reservationCancelFacade.cancel(reservationId, ReservationActor.customer(member.memberId()), null);
+        return ReservationResponse.from(
+                reservationCancelFacade.cancel(reservationId, ReservationActor.customer(member.memberId()), null));
     }
 
     /** 픽업 QR 서명 토큰 (C-07, 13-9 1단계). 본인 예약만, 남의 예약은 404 */
     @GetMapping("/{reservationId}/pickup-code")
     public PickupCodeResponse pickupCode(@AuthenticationPrincipal AuthMember member, @PathVariable long reservationId) {
-        return pickupCodeService.issue(reservationId, member.memberId());
+        return PickupCodeResponse.from(pickupCodeService.issue(reservationId, member.memberId()));
     }
 
     private static String key(String idempotencyKey) {

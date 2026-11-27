@@ -1,21 +1,22 @@
 package com.fivexbread.inbound.controller.reservation;
 
-import com.fivexbread.inbound.controller.reservation.model.response.AdminReservationDetailResponse;
 import com.fivexbread.domain.reservation.AdminReservationQueryService;
-import com.fivexbread.inbound.controller.reservation.model.response.AdminReservationResponse;
-import com.fivexbread.domain.reservation.model.vo.ReservationActor;
 import com.fivexbread.domain.reservation.ReservationCancelFacade;
+import com.fivexbread.domain.reservation.ReservationPickupService;
+import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
+import com.fivexbread.domain.reservation.model.vo.ReservationActor;
+import com.fivexbread.domain.reservation.model.vo.ReservationResult;
 import com.fivexbread.inbound.controller.reservation.model.request.ReservationPatch;
 import com.fivexbread.inbound.controller.reservation.model.request.ReservationPatchBodies;
-import com.fivexbread.domain.reservation.ReservationPickupService;
+import com.fivexbread.inbound.controller.reservation.model.response.AdminReservationDetailResponse;
+import com.fivexbread.inbound.controller.reservation.model.response.AdminReservationResponse;
 import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse;
-import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Content;
-import com.fivexbread.domain.auth.model.vo.AuthMember;
 import com.fivexbread.common.ApiExceptionHandler.FieldViolation;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
+import com.fivexbread.domain.auth.model.vo.AuthMember;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
@@ -67,13 +68,14 @@ public class AdminReservationController {
         if (last4 != null && !PHONE_LAST4.matcher(last4).matches()) {
             throw invalid("phoneLast4", "Pattern", "번호 뒷 4자리는 숫자 4자리입니다");
         }
-        return queryService.search(saleDate == null ? LocalDate.now(clock) : saleDate, no, last4, status);
+        return queryService.search(saleDate == null ? LocalDate.now(clock) : saleDate, no, last4, status).stream()
+                .map(AdminReservationResponse::from).toList();
     }
 
     /** 사장님 예약 상세. 손님 상세 + 회원(마스킹) + 상태 이력. 없으면 404 */
     @GetMapping("/{reservationId}")
     public AdminReservationDetailResponse detail(@PathVariable long reservationId) {
-        return queryService.detail(reservationId);
+        return AdminReservationDetailResponse.from(queryService.detail(reservationId));
     }
 
     @PatchMapping(value = "/{reservationId}", consumes = ReservationController.MERGE_PATCH_JSON)
@@ -81,12 +83,13 @@ public class AdminReservationController {
                                      @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(mediaType = ReservationController.MERGE_PATCH_JSON, schema = @Schema(implementation = ReservationPatchBodies.AdminStatusChange.class)))
                                      @RequestBody Map<String, Object> body) {
         ReservationPatch patch = ReservationPatch.admin(body);
-        return switch (patch.status()) {
+        ReservationResult result = switch (patch.status()) {
             case CANCELED -> reservationCancelFacade.cancel(reservationId, ReservationActor.admin(admin.memberId()),
                     patch.cancelReason());
             case PICKED_UP -> reservationPickupService.pickUp(reservationId, admin.memberId());
             default -> throw new IllegalStateException("ReservationPatch 가 허용하지 않은 상태 " + patch.status());
         };
+        return ReservationResponse.from(result);
     }
 
     private static String blankToNull(String value) {

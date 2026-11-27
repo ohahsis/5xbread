@@ -43,7 +43,7 @@ Spring Security + JWT, STOMP WebSocket, Testcontainers
   1. `domain..`은 `inbound..`과 `config..`을 import하지 않는다
   2. `config..`은 `inbound..`을 import하지 않는다
   3. `@Transactional`이 붙은 클래스(클래스나 메서드에)는 `org.springframework.data.redis..`에 의존하지 않는다
-- 지금 있는 위반은 `backend/archunit_store` 허용 목록에 있다. **허용 목록은 줄이기만 한다.** 위반을 고치면 테스트가 목록을 줄여 다시 쓰므로 그 변경을 함께 커밋하고, 새 위반을 목록에 넣지 않는다
+- 1은 위반 0을 강제한다(허용 목록 없음). 2·3은 `backend/archunit_store` 허용 목록(지금 0건)에 얼려 새 위반만 막는다. **허용 목록은 줄이기만 한다.** 위반을 고치면 테스트가 목록을 줄여 다시 쓰므로 그 변경을 함께 커밋하고, 새 위반을 목록에 넣지 않는다
 
 ## 규칙
 - 시간: DB DATETIME(KST) / 엔티티 LocalDateTime / API OffsetDateTime(+09:00)

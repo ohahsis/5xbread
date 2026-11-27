@@ -1,6 +1,6 @@
 package com.fivexbread.domain.reservation;
 
-import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse.ItemResponse;
+import com.fivexbread.domain.reservation.model.vo.ReservationLine;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -20,13 +20,13 @@ class ReservationItems {
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
-    List<ItemResponse> of(long reservationId) {
+    List<ReservationLine> of(long reservationId) {
         return of(List.of(reservationId)).getOrDefault(reservationId, List.of());
     }
 
     /** 예약 여러 건을 쿼리 한 번으로 (N+1 없음). reservationId → 항목 */
-    Map<Long, List<ItemResponse>> of(Collection<Long> reservationIds) {
-        Map<Long, List<ItemResponse>> items = new LinkedHashMap<>();
+    Map<Long, List<ReservationLine>> of(Collection<Long> reservationIds) {
+        Map<Long, List<ReservationLine>> items = new LinkedHashMap<>();
         if (reservationIds.isEmpty()) {
             return items;
         }
@@ -37,7 +37,7 @@ class ReservationItems {
                 Map.of("ids", reservationIds),
                 rs -> {
                     items.computeIfAbsent(rs.getLong(1), id -> new ArrayList<>())
-                            .add(new ItemResponse(rs.getLong(2), rs.getString(3), rs.getInt(4), rs.getInt(5)));
+                            .add(new ReservationLine(rs.getLong(2), rs.getString(3), rs.getInt(4), rs.getInt(5)));
                 });
         return items;
     }

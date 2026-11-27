@@ -5,13 +5,13 @@ import com.fivexbread.common.ErrorCode;
 import com.fivexbread.domain.member.model.enums.MemberStatus;
 import com.fivexbread.domain.reservation.model.Reservation;
 import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
+import com.fivexbread.domain.reservation.model.vo.ReservationLine;
 import com.fivexbread.domain.reservation.model.vo.ReservationPlan;
+import com.fivexbread.domain.reservation.model.vo.ReservationResult;
 import com.fivexbread.domain.reservation.model.vo.StockFailure;
 import com.fivexbread.domain.reservation.repository.ReservationRepository;
 import com.fivexbread.domain.saledate.model.vo.BreadQuantity;
 import com.fivexbread.domain.saledate.repository.DailyStockRepository;
-import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse.ItemResponse;
-import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -53,7 +53,7 @@ public class ReservationTxService {
      * 3. 재고 조건부 UPDATE. 0행이면 Redis 와 DB 잔여가 어긋난 것 → StockShortageException
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public ReservationResponse create(ReservationPlan plan, String reservationNo, String idempotencyKey) {
+    public ReservationResult create(ReservationPlan plan, String reservationNo, String idempotencyKey) {
         lockActiveMember(plan.memberId());
         if (dailyCountExceeded(plan)) {
             rejectedByDb(plan, ReservationLimitMetrics.DAILY_COUNT);
@@ -94,7 +94,7 @@ public class ReservationTxService {
      * 실패는 예외로 끝나 트랜잭션 전체가 롤백된다. 되돌릴 Redis 차감이 없어 보상도 없다.
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public ReservationResponse createDbOnly(ReservationPlan plan, String reservationNo, String idempotencyKey) {
+    public ReservationResult createDbOnly(ReservationPlan plan, String reservationNo, String idempotencyKey) {
         lockActiveMember(plan.memberId());
         if (dailyCountExceeded(plan)) {
             throw new BusinessException(ErrorCode.RESERVATION_COUNT_EXCEEDED);
@@ -153,7 +153,7 @@ public class ReservationTxService {
                 .mapToInt(row -> Math.max(row.getQuantity().intValue(), 0)).findFirst().orElse(0);
     }
 
-    private ReservationResponse save(ReservationPlan plan, String reservationNo, String idempotencyKey) {
+    private ReservationResult save(ReservationPlan plan, String reservationNo, String idempotencyKey) {
         LocalDateTime now = LocalDateTime.now(clock);
         Reservation reservation = reservationRepository.saveAndFlush(Reservation.create(reservationNo,
                 plan.memberId(), plan.phoneLast4(), plan.saleDate(), plan.pickupSlotId(), plan.pickupAt(),
@@ -171,8 +171,8 @@ public class ReservationTxService {
                 VALUES (?, NULL, ?, ?, ?)""",
                 reservation.getId(), ReservationStatus.RESERVED.name(), plan.memberId(), now);
 
-        return ReservationResponse.of(reservation, plan.items().stream()
-                .map(item -> new ItemResponse(item.breadId(), item.name(), item.quantity(), item.unitPrice()))
+        return ReservationResult.of(reservation, plan.items().stream()
+                .map(item -> new ReservationLine(item.breadId(), item.name(), item.quantity(), item.unitPrice()))
                 .toList());
     }
 }

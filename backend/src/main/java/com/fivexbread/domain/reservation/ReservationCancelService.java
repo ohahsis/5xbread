@@ -1,15 +1,15 @@
 package com.fivexbread.domain.reservation;
 
-import com.fivexbread.domain.reservation.model.Reservation;
-import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
-import com.fivexbread.domain.reservation.model.vo.ReservationActor;
-import com.fivexbread.domain.reservation.repository.ReservationRepository;
-import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
 import com.fivexbread.common.outbox.Outbox;
 import com.fivexbread.domain.reservation.model.Reservation.Cancellation;
-import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse.ItemResponse;
+import com.fivexbread.domain.reservation.model.Reservation;
+import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
+import com.fivexbread.domain.reservation.model.vo.ReservationActor;
+import com.fivexbread.domain.reservation.model.vo.ReservationLine;
+import com.fivexbread.domain.reservation.model.vo.ReservationResult;
+import com.fivexbread.domain.reservation.repository.ReservationRepository;
 import com.fivexbread.domain.saledate.repository.DailyStockRepository;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -44,7 +44,7 @@ public class ReservationCancelService {
     }
 
     /** @param outboxEventId Redis 복구 이벤트(STOCK_RELEASE) id. 커밋 후 OutboxRelay.publish 에 넘긴다 */
-    record Canceled(ReservationResponse response, long outboxEventId) {
+    record Canceled(ReservationResult result, long outboxEventId) {
     }
 
     @Transactional(readOnly = true)
@@ -64,9 +64,9 @@ public class ReservationCancelService {
         }
 
         // 예약(C-04)과 같은 breadId 오름차순으로 행을 잠가 순환 대기(데드락)가 없다
-        List<ItemResponse> items = reservationItems.of(reservationId);
+        List<ReservationLine> items = reservationItems.of(reservationId);
         Map<Long, Integer> quantities = new LinkedHashMap<>();
-        for (ItemResponse item : items) {
+        for (ReservationLine item : items) {
             if (dailyStockRepository.decreaseReserved(reservation.getSaleDate(), item.breadId(), item.quantity()) == 0) {
                 throw new IllegalStateException("예약 수량보다 많이 되돌리려 함 reservationId=" + reservationId
                         + " breadId=" + item.breadId());
@@ -83,8 +83,8 @@ public class ReservationCancelService {
         long eventId = outbox.append(StockReleaseEvent.TYPE, new StockReleaseEvent(reservationId,
                 reservation.getSaleDate(), reservation.getMemberId(), quantities, generation));
 
-        ReservationResponse response = ReservationResponse.canceled(reservation, cancellation.canceledAt(), items);
-        return new Canceled(response, eventId);
+        ReservationResult result = ReservationResult.canceled(reservation, cancellation.canceledAt(), items);
+        return new Canceled(result, eventId);
     }
 
     // 손님은 본인 예약만. 남의 예약과 없는 예약을 구분하지 않고 404 (13-2 2단계)

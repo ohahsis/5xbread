@@ -1,10 +1,10 @@
 package com.fivexbread.domain.reservation;
 
-import com.fivexbread.domain.reservation.model.vo.ReservationActor;
-import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse;
 import com.fivexbread.common.outbox.OutboxRelay;
 import com.fivexbread.domain.reservation.ReservationCancelService.Canceled;
 import com.fivexbread.domain.reservation.ReservationCancelService.Target;
+import com.fivexbread.domain.reservation.model.vo.ReservationActor;
+import com.fivexbread.domain.reservation.model.vo.ReservationResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -25,13 +25,13 @@ public class ReservationCancelFacade {
     private final ReservationStockStore stockStore;
     private final OutboxRelay outboxRelay;
 
-    public ReservationResponse cancel(long reservationId, ReservationActor actor, String reason) {
+    public ReservationResult cancel(long reservationId, ReservationActor actor, String reason) {
         Target target = cancelService.target(reservationId, actor);
         String generation = generation(target);
         Canceled canceled = cancelService.cancel(reservationId, actor, reason, generation);
         // 커밋 후 처리. 실패해도 취소는 확정됐으므로 200 (행이 남아 폴러가 처리). 3단계에서 잔여 변경 발행(C-03)도 여기에 붙인다
         outboxRelay.publish(canceled.outboxEventId());
-        return canceled.response();
+        return canceled.result();
     }
 
     /**

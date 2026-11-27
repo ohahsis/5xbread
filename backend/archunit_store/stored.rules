@@ -2,4 +2,3 @@
 #Fri Nov 27 13:21:44 KST 2026
 no\ classes\ that\ have\ @Transactional\ on\ the\ class\ or\ a\ method\ should\ depend\ on\ classes\ that\ reside\ in\ a\ package\ 'org.springframework.data.redis..'=510c47d4-3a46-43ff-afd9-74e2cd7b5c97
 no\ classes\ that\ reside\ in\ a\ package\ 'com.fivexbread.config..'\ should\ depend\ on\ classes\ that\ reside\ in\ a\ package\ 'com.fivexbread.inbound..'=95e3cef7-9dd7-4211-bbd3-5fad06ab2079
-no\ classes\ that\ reside\ in\ a\ package\ 'com.fivexbread.domain..'\ should\ depend\ on\ classes\ that\ reside\ in\ any\ package\ ['com.fivexbread.inbound..',\ 'com.fivexbread.config..']=13f37dc3-e2d1-437f-9974-149e481782ad

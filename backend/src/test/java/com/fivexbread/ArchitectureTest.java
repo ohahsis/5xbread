@@ -13,7 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 패키지 의존 규칙 (decisions.md 2장 "패키지 구조").
- * 지금 있는 위반은 archunit_store 허용 목록에 얼려 두고 새 위반만 막는다. 허용 목록은 줄이기만 한다.
+ * domain 규칙은 위반 0 을 강제한다. 나머지는 지금 있는 위반을 archunit_store 허용 목록에 얼려 두고 새 위반만 막는다.
+ * 허용 목록은 줄이기만 한다.
  */
 @AnalyzeClasses(packages = "com.fivexbread", importOptions = ImportOption.DoNotIncludeTests.class)
 class ArchitectureTest {
@@ -24,10 +25,11 @@ class ArchitectureTest {
             c -> c.isAnnotatedWith(Transactional.class)
                     || c.getMethods().stream().anyMatch(m -> m.isAnnotatedWith(Transactional.class)));
 
+    /** 허용 목록이 비어(2026-11-27) freeze 를 뺐다. 위반 0 을 강제한다 */
     @ArchTest
-    static final ArchRule domain은_inbound와_config에_의존하지_않는다 = FreezingArchRule.freeze(
+    static final ArchRule domain은_inbound와_config에_의존하지_않는다 =
             noClasses().that().resideInAPackage("com.fivexbread.domain..")
-                    .should().dependOnClassesThat().resideInAnyPackage("com.fivexbread.inbound..", "com.fivexbread.config.."));
+                    .should().dependOnClassesThat().resideInAnyPackage("com.fivexbread.inbound..", "com.fivexbread.config..");
 
     @ArchTest
     static final ArchRule config는_inbound에_의존하지_않는다 = FreezingArchRule.freeze(

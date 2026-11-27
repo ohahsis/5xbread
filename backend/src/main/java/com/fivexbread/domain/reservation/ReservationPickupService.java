@@ -1,11 +1,11 @@
 package com.fivexbread.domain.reservation;
 
-import com.fivexbread.domain.reservation.model.Reservation;
-import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
-import com.fivexbread.domain.reservation.repository.ReservationRepository;
-import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
+import com.fivexbread.domain.reservation.model.Reservation;
+import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
+import com.fivexbread.domain.reservation.model.vo.ReservationResult;
+import com.fivexbread.domain.reservation.repository.ReservationRepository;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -30,7 +30,7 @@ public class ReservationPickupService {
     private final Clock clock;
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public ReservationResponse pickUp(long reservationId, long adminId) {
+    public ReservationResult pickUp(long reservationId, long adminId) {
         LocalDateTime now = LocalDateTime.now(clock);
         LocalDate today = now.toLocalDate();
         int updated = reservationRepository.pickUpIfReserved(reservationId, now, today);
@@ -49,6 +49,6 @@ public class ReservationPickupService {
                 INSERT INTO reservation_history (reservation_id, from_status, to_status, actor_id, changed_at)
                 VALUES (?, ?, ?, ?, ?)""",
                 reservationId, ReservationStatus.RESERVED.name(), ReservationStatus.PICKED_UP.name(), adminId, now);
-        return ReservationResponse.pickedUp(reservation, now, reservationItems.of(reservationId));
+        return ReservationResult.pickedUp(reservation, now, reservationItems.of(reservationId));
     }
 }

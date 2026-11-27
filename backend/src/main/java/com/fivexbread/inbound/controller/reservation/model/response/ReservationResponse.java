@@ -1,7 +1,8 @@
 package com.fivexbread.inbound.controller.reservation.model.response;
 
-import com.fivexbread.domain.reservation.model.Reservation;
 import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
+import com.fivexbread.domain.reservation.model.vo.ReservationLine;
+import com.fivexbread.domain.reservation.model.vo.ReservationResult;
 import io.swagger.v3.oas.annotations.media.Schema;
 import static com.fivexbread.common.Times.KST;
 
@@ -26,27 +27,21 @@ public record ReservationResponse(
 
     /** @param unitPrice 예약 당시 가격 (reservation_item.unit_price) */
     public record ItemResponse(long breadId, String name, int quantity, int unitPrice) {
+
+        public static ItemResponse from(ReservationLine line) {
+            return new ItemResponse(line.breadId(), line.name(), line.quantity(), line.unitPrice());
+        }
+
+        public static List<ItemResponse> from(List<ReservationLine> lines) {
+            return lines.stream().map(ItemResponse::from).toList();
+        }
     }
 
-    public static ReservationResponse of(Reservation reservation, List<ItemResponse> items) {
-        return of(reservation, reservation.getStatus(), reservation.getCanceledAt(), reservation.getPickedUpAt(), items);
-    }
-
-    /** 조건부 UPDATE 로 취소한 직후. 읽어 둔 엔티티는 옛 상태라 바뀐 값을 따로 받는다 */
-    public static ReservationResponse canceled(Reservation reservation, LocalDateTime canceledAt, List<ItemResponse> items) {
-        return of(reservation, ReservationStatus.CANCELED, canceledAt, null, items);
-    }
-
-    /** 조건부 UPDATE 로 수령 처리한 직후 */
-    public static ReservationResponse pickedUp(Reservation reservation, LocalDateTime pickedUpAt, List<ItemResponse> items) {
-        return of(reservation, ReservationStatus.PICKED_UP, null, pickedUpAt, items);
-    }
-
-    private static ReservationResponse of(Reservation reservation, ReservationStatus status, LocalDateTime canceledAt,
-                                          LocalDateTime pickedUpAt, List<ItemResponse> items) {
-        return new ReservationResponse(reservation.getId(), reservation.getReservationNo(), status,
-                reservation.getSaleDate(), toOffset(reservation.getPickupAt()), toOffset(reservation.cancelDeadline()),
-                toOffset(canceledAt), toOffset(pickedUpAt), items, reservation.getTotalPrice());
+    public static ReservationResponse from(ReservationResult result) {
+        return new ReservationResponse(result.reservationId(), result.reservationNo(), result.status(),
+                result.saleDate(), toOffset(result.pickupAt()), toOffset(result.cancelDeadline()),
+                toOffset(result.canceledAt()), toOffset(result.pickedUpAt()), ItemResponse.from(result.items()),
+                result.totalPrice());
     }
 
     public static OffsetDateTime toOffset(LocalDateTime time) {

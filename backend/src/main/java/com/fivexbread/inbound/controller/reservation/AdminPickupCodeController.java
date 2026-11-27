@@ -1,8 +1,8 @@
 package com.fivexbread.inbound.controller.reservation;
 
-import com.fivexbread.inbound.controller.reservation.model.response.AdminReservationResponse;
 import com.fivexbread.domain.reservation.PickupCodeService;
 import com.fivexbread.inbound.controller.reservation.model.request.PickupCodeVerificationRequest;
+import com.fivexbread.inbound.controller.reservation.model.response.AdminReservationResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -23,6 +23,6 @@ public class AdminPickupCodeController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public AdminReservationResponse verify(@Valid @RequestBody PickupCodeVerificationRequest request) {
-        return pickupCodeService.verify(request.code());
+        return AdminReservationResponse.from(pickupCodeService.verify(request.code()));
     }
 }

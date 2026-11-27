@@ -1,7 +1,7 @@
 package com.fivexbread.inbound.controller.reservation.model.response;
 
-import com.fivexbread.domain.reservation.model.Reservation;
 import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
+import com.fivexbread.domain.reservation.model.vo.ReservationDetail;
 import io.swagger.v3.oas.annotations.media.Schema;
 import static com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse.toOffset;
 
@@ -25,11 +25,11 @@ public record ReservationDetailResponse(
         int totalPrice
 ) {
 
-    public static ReservationDetailResponse of(Reservation reservation, List<ItemResponse> items, LocalDateTime now) {
-        LocalDateTime canceledAt = reservation.getCanceledAt();
-        return new ReservationDetailResponse(reservation.getId(), reservation.getReservationNo(), reservation.getStatus(),
-                reservation.getSaleDate(), toOffset(reservation.getPickupAt()), toOffset(reservation.cancelDeadline()),
-                reservation.cancelable(now), canceledAt == null ? null : toOffset(canceledAt), items,
-                reservation.getTotalPrice());
+    public static ReservationDetailResponse from(ReservationDetail detail) {
+        LocalDateTime canceledAt = detail.canceledAt();
+        return new ReservationDetailResponse(detail.reservationId(), detail.reservationNo(), detail.status(),
+                detail.saleDate(), toOffset(detail.pickupAt()), toOffset(detail.cancelDeadline()),
+                detail.cancelable(), canceledAt == null ? null : toOffset(canceledAt), ItemResponse.from(detail.items()),
+                detail.totalPrice());
     }
 }

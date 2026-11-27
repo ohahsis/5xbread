@@ -1,13 +1,13 @@
 package com.fivexbread.inbound.controller.reservation;
 
-import com.fivexbread.domain.reservation.model.vo.AdminReservationCursor;
-import com.fivexbread.inbound.controller.reservation.model.response.AdminReservationListResponse;
-import com.fivexbread.domain.reservation.AdminReservationQueryService;
-import com.fivexbread.domain.reservation.PickupSummaryQueryService;
-import com.fivexbread.inbound.controller.reservation.model.response.PickupSummaryResponse;
-import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
+import com.fivexbread.domain.reservation.AdminReservationQueryService;
+import com.fivexbread.domain.reservation.PickupSummaryQueryService;
+import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
+import com.fivexbread.domain.reservation.model.vo.AdminReservationCursor;
+import com.fivexbread.inbound.controller.reservation.model.response.AdminReservationListResponse;
+import com.fivexbread.inbound.controller.reservation.model.response.PickupSummaryResponse;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -44,7 +44,7 @@ public class AdminSaleDateReservationController {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "size 는 1 이상 " + MAX_SIZE + " 이하입니다");
         }
         AdminReservationCursor position = cursor == null || cursor.isEmpty() ? null : AdminReservationCursor.decode(cursor);
-        return queryService.list(saleDate, status, pickupSlotId, position, size);
+        return AdminReservationListResponse.from(queryService.list(saleDate, status, pickupSlotId, position, size));
     }
 
     /** 시간대별·빵별 포장 수량. status 기본은 RESERVED(아직 받아 가지 않은 것) */
@@ -52,6 +52,6 @@ public class AdminSaleDateReservationController {
     public PickupSummaryResponse pickupSummary(
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate saleDate,
             @RequestParam(defaultValue = "RESERVED") ReservationStatus status) {
-        return pickupSummaryQueryService.summary(saleDate, status);
+        return PickupSummaryResponse.from(pickupSummaryQueryService.summary(saleDate, status));
     }
 }

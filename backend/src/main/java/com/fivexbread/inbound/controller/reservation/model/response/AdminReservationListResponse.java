@@ -1,9 +1,15 @@
 package com.fivexbread.inbound.controller.reservation.model.response;
 
+import com.fivexbread.domain.reservation.model.vo.AdminReservationPage;
 import com.fivexbread.inbound.controller.reservation.model.response.AdminReservationResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
 /** 판매일 예약 목록 (A-05). 마지막 페이지면 nextCursor 는 null */
 public record AdminReservationListResponse(List<AdminReservationResponse> items, @Schema(nullable = true) String nextCursor, boolean hasNext) {
+
+    public static AdminReservationListResponse from(AdminReservationPage page) {
+        return new AdminReservationListResponse(page.items().stream().map(AdminReservationResponse::from).toList(),
+                page.nextCursor(), page.hasNext());
+    }
 }

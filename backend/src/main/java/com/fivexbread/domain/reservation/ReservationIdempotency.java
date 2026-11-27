@@ -1,6 +1,6 @@
 package com.fivexbread.domain.reservation;
 
-import com.fivexbread.inbound.controller.reservation.model.request.ReservationCreateRequest;
+import com.fivexbread.domain.reservation.model.vo.ReservationCommand;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,9 +48,9 @@ public class ReservationIdempotency {
     public record StoredResponse(String fingerprint, int status, String location, JsonNode body) {
     }
 
-    public String fingerprint(long memberId, ReservationCreateRequest request) {
+    public String fingerprint(long memberId, ReservationCommand command) {
         try {
-            String source = memberId + ":" + objectMapper.writeValueAsString(request);
+            String source = memberId + ":" + objectMapper.writeValueAsString(command);
             byte[] hash = MessageDigest.getInstance("SHA-256").digest(source.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         } catch (JsonProcessingException | NoSuchAlgorithmException e) {
