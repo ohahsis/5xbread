@@ -2,6 +2,7 @@ package com.fivexbread.inbound.controller.saledate.model.response;
 
 import com.fivexbread.domain.saledate.model.enums.SaleBreadStatus;
 import com.fivexbread.domain.saledate.model.enums.SaleDateStatus;
+import com.fivexbread.domain.saledate.model.vo.SaleBreads;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.util.List;
@@ -33,5 +34,15 @@ public record SaleBreadsResponse(
             @Schema(nullable = true) Integer myReservedQty,
             SaleBreadStatus status
     ) {
+
+        static SaleBreadResponse from(SaleBreads.Bread bread) {
+            return new SaleBreadResponse(bread.breadId(), bread.name(), bread.price(), bread.remaining(),
+                    bread.perUserLimit(), bread.myReservedQty(), bread.status());
+        }
+    }
+
+    public static SaleBreadsResponse from(SaleBreads breads) {
+        return new SaleBreadsResponse(breads.saleDate(), breads.status(), breads.version(),
+                breads.breads().stream().map(SaleBreadResponse::from).toList());
     }
 }

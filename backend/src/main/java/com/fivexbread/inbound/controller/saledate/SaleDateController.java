@@ -1,13 +1,13 @@
 package com.fivexbread.inbound.controller.saledate;
 
-import com.fivexbread.inbound.controller.saledate.model.response.PickupSlotResponse;
-import com.fivexbread.domain.saledate.SaleBreadsFacade;
-import com.fivexbread.inbound.controller.saledate.model.response.SaleBreadsResponse;
-import com.fivexbread.domain.saledate.SaleDateQueryService;
-import com.fivexbread.inbound.controller.saledate.model.response.SaleDateStatusResponse;
-import com.fivexbread.domain.auth.model.vo.AuthMember;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
+import com.fivexbread.domain.auth.model.vo.AuthMember;
+import com.fivexbread.domain.saledate.SaleBreadsFacade;
+import com.fivexbread.domain.saledate.SaleDateQueryService;
+import com.fivexbread.inbound.controller.saledate.model.response.PickupSlotResponse;
+import com.fivexbread.inbound.controller.saledate.model.response.SaleBreadsResponse;
+import com.fivexbread.inbound.controller.saledate.model.response.SaleDateStatusResponse;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -43,12 +43,12 @@ public class SaleDateController {
             throw new BusinessException(ErrorCode.INVALID_REQUEST,
                     "조회 기간은 from 부터 to 까지 최대 " + MAX_RANGE_DAYS + "일입니다");
         }
-        return saleDateQueryService.list(from, to);
+        return saleDateQueryService.list(from, to).stream().map(SaleDateStatusResponse::from).toList();
     }
 
     @GetMapping("/{date}")
     public SaleDateStatusResponse get(@PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return saleDateQueryService.get(date);
+        return SaleDateStatusResponse.from(saleDateQueryService.get(date));
     }
 
     /** 잔여는 수시로, 내 예약 수량은 사람마다 달라 공유 캐시에 남지 않게 no-store (13-4 7단계) */
@@ -57,11 +57,11 @@ public class SaleDateController {
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @AuthenticationPrincipal AuthMember member) {
         Long memberId = member == null ? null : member.memberId();
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(saleBreadsFacade.breads(date, memberId));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(SaleBreadsResponse.from(saleBreadsFacade.breads(date, memberId)));
     }
 
     @GetMapping("/{date}/pickup-slots")
     public List<PickupSlotResponse> pickupSlots(@PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return saleDateQueryService.pickupSlots(date);
+        return saleDateQueryService.pickupSlots(date).stream().map(PickupSlotResponse::of).toList();
     }
 }

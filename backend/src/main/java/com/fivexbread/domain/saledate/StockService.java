@@ -2,20 +2,19 @@ package com.fivexbread.domain.saledate;
 
 import com.fivexbread.domain.saledate.model.DailyStock;
 import com.fivexbread.domain.saledate.model.SaleDate;
+import com.fivexbread.domain.saledate.model.vo.StockRowCommand;
 import com.fivexbread.domain.saledate.model.vo.StockRowError;
+import com.fivexbread.domain.saledate.model.vo.StockSheet;
 import com.fivexbread.domain.saledate.repository.DailyStockRepository;
 import com.fivexbread.domain.saledate.repository.SaleDateRepository;
-import com.fivexbread.inbound.controller.saledate.model.request.StockRowRequest;
-import com.fivexbread.inbound.controller.saledate.model.response.StockRowResponse;
-import com.fivexbread.inbound.controller.saledate.model.response.StocksResponse;
 import static com.fivexbread.domain.saledate.model.vo.StockRowError.Reason.*;
 
-import com.fivexbread.domain.catalog.model.Bread;
-import com.fivexbread.domain.catalog.repository.BreadRepository;
-import com.fivexbread.domain.catalog.CatalogChanged;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
 import com.fivexbread.common.outbox.Outbox;
+import com.fivexbread.domain.catalog.CatalogChanged;
+import com.fivexbread.domain.catalog.model.Bread;
+import com.fivexbread.domain.catalog.repository.BreadRepository;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -59,7 +58,7 @@ public class StockService {
     private final Outbox outbox;
 
     /** @param outboxEventId 늘린 빵이 있으면 STOCK_INCREASE 이벤트 id, 없으면 null */
-    public record Result(StocksResponse stocks, String eTag, Long outboxEventId) {
+    public record Result(StockSheet stocks, String eTag, Long outboxEventId) {
     }
 
     @Transactional(readOnly = true)
@@ -73,10 +72,10 @@ public class StockService {
      * 버전이 같으면 그사이 다른 수량 저장이 없었으므로, 저장 트랜잭션에서도 같은 변화가 된다.
      */
     @Transactional(readOnly = true)
-    public List<ReservableChange> reservableChanges(LocalDate date, int expectedVersion, List<StockRowRequest> rows) {
+    public List<ReservableChange> reservableChanges(LocalDate date, int expectedVersion, List<StockRowCommand> rows) {
         Map<Long, DailyStock> stocks = checkRows(date, expectedVersion, rows);
         List<ReservableChange> changes = new ArrayList<>();
-        for (StockRowRequest row : rows) {
+        for (StockRowCommand row : rows) {
             DailyStock stock = stocks.get(row.breadId());
             if (stock != null && stock.getReservableQty() != row.reservableQty()) {
                 changes.add(new ReservableChange(row.breadId(), stock.getReservableQty(), row.reservableQty()));
@@ -94,7 +93,7 @@ public class StockService {
     }
 
     @Transactional
-    public Result put(LocalDate date, int expectedVersion, List<StockRowRequest> rows) {
+    public Result put(LocalDate date, int expectedVersion, List<StockRowCommand> rows) {
         Map<Long, DailyStock> stocks = checkRows(date, expectedVersion, rows);
 
         if (saleDateRepository.increaseVersion(date, expectedVersion) == 0) {
@@ -103,8 +102,8 @@ public class StockService {
         List<Long> belowReserved = new ArrayList<>();
         Map<Long, Integer> increases = new LinkedHashMap<>();
         // 요청 순서가 아니라 breadId 순서로 행을 잠근다 (decisions.md 6장 "A-02 잠금 순서")
-        List<StockRowRequest> byBreadId = rows.stream().sorted(Comparator.comparing(StockRowRequest::breadId)).toList();
-        for (StockRowRequest row : byBreadId) {
+        List<StockRowCommand> byBreadId = rows.stream().sorted(Comparator.comparing(StockRowCommand::breadId)).toList();
+        for (StockRowCommand row : byBreadId) {
             DailyStock stock = stocks.get(row.breadId());
             if (stock != null && row.reservableQty() > stock.getReservableQty()) {
                 increases.put(row.breadId(), row.reservableQty() - stock.getReservableQty());
@@ -131,7 +130,7 @@ public class StockService {
     }
 
     /** 404 → 휴무일 422 → 버전 412 → 행 검사 422. 통과하면 이 날의 현재 수량 행(breadId → 행) */
-    private Map<Long, DailyStock> checkRows(LocalDate date, int expectedVersion, List<StockRowRequest> rows) {
+    private Map<Long, DailyStock> checkRows(LocalDate date, int expectedVersion, List<StockRowCommand> rows) {
         SaleDate saleDate = findSaleDate(date);
         if (saleDate.isHoliday()) {
             throw new BusinessException(ErrorCode.SALE_DATE_HOLIDAY);
@@ -142,7 +141,7 @@ public class StockService {
 
         Map<Long, DailyStock> stocks = dailyStockRepository.findBySaleDate(date).stream()
                 .collect(Collectors.toMap(DailyStock::getBreadId, Function.identity()));
-        Map<Long, Bread> breads = breadRepository.findAllById(rows.stream().map(StockRowRequest::breadId).toList())
+        Map<Long, Bread> breads = breadRepository.findAllById(rows.stream().map(StockRowCommand::breadId).toList())
                 .stream().collect(Collectors.toMap(Bread::getId, Function.identity()));
         List<StockRowError> errors = validate(rows, stocks, breads);
         if (!errors.isEmpty()) {
@@ -152,11 +151,11 @@ public class StockService {
     }
 
     // 첫 오류에서 멈추지 않고 모든 행의 모든 위반을 모은다 (13-8 어필 포인트)
-    private static List<StockRowError> validate(List<StockRowRequest> rows, Map<Long, DailyStock> stocks,
+    private static List<StockRowError> validate(List<StockRowCommand> rows, Map<Long, DailyStock> stocks,
                                                 Map<Long, Bread> breads) {
         List<StockRowError> errors = new ArrayList<>();
         Set<Long> seen = new HashSet<>();
-        for (StockRowRequest row : rows) {
+        for (StockRowCommand row : rows) {
             Long breadId = row.breadId();
             if (!seen.add(breadId)) {
                 errors.add(StockRowError.of(breadId, "breadId", DUPLICATE_BREAD));
@@ -190,22 +189,22 @@ public class StockService {
         return errors;
     }
 
-    private StocksResponse view(LocalDate date) {
+    private StockSheet view(LocalDate date) {
         Map<Long, DailyStock> stocks = dailyStockRepository.findBySaleDate(date).stream()
                 .collect(Collectors.toMap(DailyStock::getBreadId, Function.identity()));
-        List<StockRowResponse> rows = breadRepository.findAll().stream()
+        List<StockSheet.Row> rows = breadRepository.findAll().stream()
                 .filter(bread -> bread.isActive() || stocks.containsKey(bread.getId()))
                 .sorted(Comparator.comparingInt(Bread::getDisplayOrder).thenComparing(Bread::getName))
                 .map(bread -> row(bread, stocks.get(bread.getId())))
                 .toList();
-        return new StocksResponse(date, rows);
+        return new StockSheet(date, rows);
     }
 
-    private static StockRowResponse row(Bread bread, DailyStock stock) {
+    private static StockSheet.Row row(Bread bread, DailyStock stock) {
         if (stock == null) {
-            return new StockRowResponse(bread.getId(), bread.getName(), bread.isActive(), false, 0, 0, 0, null);
+            return new StockSheet.Row(bread.getId(), bread.getName(), bread.isActive(), false, 0, 0, 0, null);
         }
-        return new StockRowResponse(bread.getId(), bread.getName(), bread.isActive(), true, stock.getProducedQty(),
+        return new StockSheet.Row(bread.getId(), bread.getName(), bread.isActive(), true, stock.getProducedQty(),
                 stock.getReservableQty(), stock.getReservedQty(), stock.getPerUserLimit());
     }
 

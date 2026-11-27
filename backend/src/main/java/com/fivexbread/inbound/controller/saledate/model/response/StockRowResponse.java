@@ -1,5 +1,6 @@
 package com.fivexbread.inbound.controller.saledate.model.response;
 
+import com.fivexbread.domain.saledate.model.vo.StockSheet;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
@@ -17,4 +18,9 @@ public record StockRowResponse(
         int reservedQty,
         @Schema(nullable = true) Integer perUserLimit
 ) {
+
+    public static StockRowResponse from(StockSheet.Row row) {
+        return new StockRowResponse(row.breadId(), row.breadName(), row.active(), row.configured(), row.producedQty(),
+                row.reservableQty(), row.reservedQty(), row.perUserLimit());
+    }
 }

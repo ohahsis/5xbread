@@ -1,7 +1,6 @@
 package com.fivexbread.inbound.controller.saledate.model.response;
 
-import com.fivexbread.domain.saledate.model.PickupSlot;
-import com.fivexbread.domain.saledate.model.SaleDate;
+import com.fivexbread.domain.saledate.model.vo.SaleDateResult;
 import static com.fivexbread.common.Times.KST;
 
 import java.time.LocalDate;
@@ -18,11 +17,11 @@ public record SaleDateResponse(
         List<LocalTime> pickupTimes
 ) {
 
-    public static SaleDateResponse of(SaleDate saleDate, List<PickupSlot> slots) {
-        return new SaleDateResponse(saleDate.getSaleDate(),
-                saleDate.getOpenAt().atZone(KST).toOffsetDateTime(),
-                saleDate.getCloseAt().atZone(KST).toOffsetDateTime(),
-                saleDate.isHoliday(),
-                slots.stream().map(slot -> slot.getPickupAt().toLocalTime()).sorted().toList());
+    public static SaleDateResponse from(SaleDateResult result) {
+        return new SaleDateResponse(result.saleDate(),
+                result.openAt().atZone(KST).toOffsetDateTime(),
+                result.closeAt().atZone(KST).toOffsetDateTime(),
+                result.holiday(),
+                result.pickupTimes());
     }
 }

@@ -1,5 +1,6 @@
 package com.fivexbread.inbound.controller.saledate.model.request;
 
+import com.fivexbread.domain.saledate.model.vo.StockRowCommand;
 import jakarta.validation.constraints.NotNull;
 
 /**
@@ -14,4 +15,8 @@ public record StockRowRequest(
         @NotNull Integer reservableQty,
         Integer perUserLimit
 ) {
+
+    public StockRowCommand toCommand() {
+        return new StockRowCommand(breadId, producedQty, reservableQty, perUserLimit);
+    }
 }

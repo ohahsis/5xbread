@@ -18,7 +18,7 @@ import static org.mockito.Mockito.when;
 
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.domain.saledate.StockReader.Snapshot;
-import com.fivexbread.inbound.controller.saledate.model.response.SaleBreadsResponse.SaleBreadResponse;
+import com.fivexbread.domain.saledate.model.vo.SaleBreads;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -60,7 +60,7 @@ class SaleBreadsFacadeTest {
     void Redis_연결_실패면_DB_값으로_200이고_적재를_시도하지_않는다() {
         when(reader.read(DATE, IDS, 7L)).thenThrow(new RedisConnectionFailureException("down"));
 
-        List<SaleBreadResponse> breads = facade.breads(DATE, 7L).breads();
+        List<SaleBreads.Bread> breads = facade.breads(DATE, 7L).breads();
 
         assertThat(breads.get(0).remaining()).isEqualTo(30);
         assertThat(breads.get(0).myReservedQty()).isEqualTo(2);

@@ -1,5 +1,8 @@
 package com.fivexbread.inbound.controller.saledate.model.response;
 
+import com.fivexbread.domain.saledate.model.vo.StockReconciliationResult;
+import static com.fivexbread.common.Times.KST;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -19,6 +22,11 @@ public record StockReconciliationResponse(long reconciliationId, LocalDate saleD
      * @param adjustment  더한 양(ADJUSTED 만 0 이 아님)
      */
     public record Item(long breadId, @Schema(nullable = true) Integer redisBefore, int dbRemaining, int adjustment, Result result) {
+
+        static Item from(StockReconciliationResult.Item item) {
+            return new Item(item.breadId(), item.redisBefore(), item.dbRemaining(), item.adjustment(),
+                    Result.valueOf(item.result().name()));
+        }
     }
 
     public enum Result {
@@ -32,5 +40,10 @@ public record StockReconciliationResponse(long reconciliationId, LocalDate saleD
         NO_KEY,
         /** 두 관측의 차이가 달라(진행 중인 예약·취소) 보정하지 않음. 잠시 뒤 다시 누르면 된다 */
         CHANGING
+    }
+
+    public static StockReconciliationResponse from(StockReconciliationResult result) {
+        return new StockReconciliationResponse(result.reconciliationId(), result.saleDate(),
+                result.reconciledAt().atZone(KST).toOffsetDateTime(), result.breads().stream().map(Item::from).toList());
     }
 }

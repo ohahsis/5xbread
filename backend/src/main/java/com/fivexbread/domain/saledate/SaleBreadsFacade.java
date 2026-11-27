@@ -1,13 +1,12 @@
 package com.fivexbread.domain.saledate;
 
+import com.fivexbread.common.BusinessException;
+import com.fivexbread.common.ErrorCode;
+import com.fivexbread.domain.saledate.StockReader.Snapshot;
 import com.fivexbread.domain.saledate.model.enums.SaleBreadStatus;
 import com.fivexbread.domain.saledate.model.enums.SaleDateStatus;
 import com.fivexbread.domain.saledate.model.vo.SaleBreadRow;
-import com.fivexbread.inbound.controller.saledate.model.response.SaleBreadsResponse;
-import com.fivexbread.common.BusinessException;
-import com.fivexbread.common.ErrorCode;
-import com.fivexbread.inbound.controller.saledate.model.response.SaleBreadsResponse.SaleBreadResponse;
-import com.fivexbread.domain.saledate.StockReader.Snapshot;
+import com.fivexbread.domain.saledate.model.vo.SaleBreads;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -35,7 +34,7 @@ import org.springframework.stereotype.Component;
 public class SaleBreadsFacade {
 
     // 매진은 아래로. 캐시 목록이 이미 노출 순서이고 정렬이 안정적이라 그 안의 순서는 유지된다 (13-4 6단계)
-    private static final Comparator<SaleBreadResponse> SOLD_OUT_LAST = Comparator.comparing(bread -> bread.remaining() <= 0);
+    private static final Comparator<SaleBreads.Bread> SOLD_OUT_LAST = Comparator.comparing(bread -> bread.remaining() <= 0);
 
     private final SaleCatalogCache catalogCache;
     private final StockReader stockReader;
@@ -45,13 +44,13 @@ public class SaleBreadsFacade {
     private final AtomicBoolean redisDown = new AtomicBoolean();
 
     /** memberId 가 null 이면 비로그인: 내 예약 수량을 조회하지 않고 null 로 둔다 */
-    public SaleBreadsResponse breads(LocalDate date, Long memberId) {
+    public SaleBreads breads(LocalDate date, Long memberId) {
         SaleDateStatus status = catalogCache.schedule(date)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND))
                 .status(LocalDateTime.now(clock));
         List<SaleBreadRow> rows = catalogCache.breads(date);
         if (rows.isEmpty()) {
-            return new SaleBreadsResponse(date, status, 0, List.of());
+            return new SaleBreads(date, status, 0, List.of());
         }
 
         List<Long> breadIds = rows.stream().map(SaleBreadRow::breadId).toList();
@@ -60,16 +59,16 @@ public class SaleBreadsFacade {
         Map<Long, Integer> mine = memberId == null ? Map.of()
                 : snapshot.mine() != null ? snapshot.mine() : queryService.myQuantities(date, memberId);
 
-        List<SaleBreadResponse> breads = rows.stream()
+        List<SaleBreads.Bread> breads = rows.stream()
                 .map(row -> {
                     int left = remaining.getOrDefault(row.breadId(), 0);
-                    return new SaleBreadResponse(row.breadId(), row.name(), row.price(), left, row.perUserLimit(),
+                    return new SaleBreads.Bread(row.breadId(), row.name(), row.price(), left, row.perUserLimit(),
                             memberId == null ? null : mine.getOrDefault(row.breadId(), 0),
                             SaleBreadStatus.of(status, left));
                 })
                 .sorted(SOLD_OUT_LAST)
                 .toList();
-        return new SaleBreadsResponse(date, status, snapshot.version(), breads);
+        return new SaleBreads(date, status, snapshot.version(), breads);
     }
 
     private Snapshot read(LocalDate date, List<Long> breadIds, Long memberId) {

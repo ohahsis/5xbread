@@ -1,8 +1,9 @@
 package com.fivexbread.inbound.controller.saledate;
 
+import com.fivexbread.domain.saledate.SaleDateService;
+import com.fivexbread.domain.saledate.model.vo.SaleDateResult;
 import com.fivexbread.inbound.controller.saledate.model.request.SaleDateRequest;
 import com.fivexbread.inbound.controller.saledate.model.response.SaleDateResponse;
-import com.fivexbread.domain.saledate.SaleDateService;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -30,10 +31,11 @@ public class AdminSaleDateController {
     @ApiResponse(responseCode = "201", description = "판매일을 새로 만듦")
     public ResponseEntity<SaleDateResponse> put(@PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
                                                 @Valid @RequestBody SaleDateRequest request) {
-        SaleDateService.Result result = saleDateService.put(date, request);
+        SaleDateResult result = saleDateService.put(date, request.toCommand());
+        SaleDateResponse body = SaleDateResponse.from(result);
         if (result.created()) {
-            return ResponseEntity.created(URI.create("/api/v1/admin/sale-dates/" + date)).body(result.saleDate());
+            return ResponseEntity.created(URI.create("/api/v1/admin/sale-dates/" + date)).body(body);
         }
-        return ResponseEntity.status(HttpStatus.OK).body(result.saleDate());
+        return ResponseEntity.status(HttpStatus.OK).body(body);
     }
 }

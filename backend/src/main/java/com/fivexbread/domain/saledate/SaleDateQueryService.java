@@ -1,14 +1,14 @@
 package com.fivexbread.domain.saledate;
 
+import com.fivexbread.common.BusinessException;
+import com.fivexbread.common.ErrorCode;
+import com.fivexbread.domain.saledate.model.PickupSlot;
 import com.fivexbread.domain.saledate.model.SaleDate;
 import com.fivexbread.domain.saledate.model.vo.BreadQuantity;
+import com.fivexbread.domain.saledate.model.vo.SaleDateStatusResult;
 import com.fivexbread.domain.saledate.repository.DailyStockRepository;
 import com.fivexbread.domain.saledate.repository.PickupSlotRepository;
 import com.fivexbread.domain.saledate.repository.SaleDateRepository;
-import com.fivexbread.inbound.controller.saledate.model.response.PickupSlotResponse;
-import com.fivexbread.inbound.controller.saledate.model.response.SaleDateStatusResponse;
-import com.fivexbread.common.BusinessException;
-import com.fivexbread.common.ErrorCode;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -33,15 +33,15 @@ public class SaleDateQueryService {
     private final DailyStockRepository dailyStockRepository;
     private final Clock clock;
 
-    public List<SaleDateStatusResponse> list(LocalDate from, LocalDate to) {
+    public List<SaleDateStatusResult> list(LocalDate from, LocalDate to) {
         LocalDateTime now = LocalDateTime.now(clock);
         return saleDateRepository.findBySaleDateBetweenOrderBySaleDate(from, to).stream()
-                .map(saleDate -> SaleDateStatusResponse.of(saleDate, now))
+                .map(saleDate -> SaleDateStatusResult.of(saleDate, now))
                 .toList();
     }
 
-    public SaleDateStatusResponse get(LocalDate date) {
-        return SaleDateStatusResponse.of(findSaleDate(date), LocalDateTime.now(clock));
+    public SaleDateStatusResult get(LocalDate date) {
+        return SaleDateStatusResult.of(findSaleDate(date), LocalDateTime.now(clock));
     }
 
     /** Redis 에 없는 빵의 DB 기준 잔여 (예약 가능 총량 − 예약 수량) */
@@ -56,11 +56,9 @@ public class SaleDateQueryService {
                 .collect(Collectors.toMap(BreadQuantity::getBreadId, row -> row.getQuantity().intValue()));
     }
 
-    public List<PickupSlotResponse> pickupSlots(LocalDate date) {
+    public List<PickupSlot> pickupSlots(LocalDate date) {
         findSaleDate(date);
-        return pickupSlotRepository.findBySaleDateOrderByPickupAt(date).stream()
-                .map(PickupSlotResponse::of)
-                .toList();
+        return pickupSlotRepository.findBySaleDateOrderByPickupAt(date);
     }
 
     private SaleDate findSaleDate(LocalDate date) {

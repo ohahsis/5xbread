@@ -3,13 +3,12 @@ package com.fivexbread.domain.saledate;
 import com.fivexbread.domain.saledate.model.DailyStock;
 import com.fivexbread.domain.saledate.model.PickupSlot;
 import com.fivexbread.domain.saledate.model.SaleDate;
+import com.fivexbread.domain.saledate.model.vo.SaleDateCommand;
+import com.fivexbread.domain.saledate.model.vo.SaleDateResult;
 import com.fivexbread.domain.saledate.model.vo.SaleDateViolation;
 import com.fivexbread.domain.saledate.repository.DailyStockRepository;
 import com.fivexbread.domain.saledate.repository.PickupSlotRepository;
 import com.fivexbread.domain.saledate.repository.SaleDateRepository;
-import com.fivexbread.inbound.controller.saledate.model.request.SaleDateRequest;
-import com.fivexbread.inbound.controller.saledate.model.response.SaleDateResponse;
-import static com.fivexbread.common.Times.KST;
 
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
@@ -18,7 +17,7 @@ import com.fivexbread.domain.saledate.model.vo.SaleDateViolation.Reason;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -45,24 +44,21 @@ public class SaleDateService {
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
-    public record Result(SaleDateResponse saleDate, boolean created) {
-    }
-
     @Transactional
-    public Result put(LocalDate date, SaleDateRequest request) {
+    public SaleDateResult put(LocalDate date, SaleDateCommand command) {
         LocalDateTime now = LocalDateTime.now(clock);
-        LocalDateTime openAt = toKst(request.openAt());
-        LocalDateTime closeAt = toKst(request.closeAt());
-        boolean holiday = request.holiday();
+        LocalDateTime openAt = command.openAt();
+        LocalDateTime closeAt = command.closeAt();
+        boolean holiday = command.holiday();
         Optional<SaleDate> existing = saleDateRepository.findById(date);
         List<PickupSlot> currentSlots = existing.isPresent()
                 ? pickupSlotRepository.findBySaleDateOrderByPickupAt(date) : List.of();
 
         List<SaleDateViolation> violations = new ArrayList<>(SaleDateRules.check(date, openAt, closeAt, holiday,
-                request.pickupTimes(), existing.orElse(null), now, storeProperties));
+                command.pickupTimes(), existing.orElse(null), now, storeProperties));
 
         Set<LocalDateTime> wanted = new HashSet<>();
-        request.pickupTimes().forEach(time -> wanted.add(date.atTime(time)));
+        command.pickupTimes().forEach(time -> wanted.add(date.atTime(time)));
         List<PickupSlot> removed = currentSlots.stream().filter(slot -> !wanted.contains(slot.getPickupAt())).toList();
         if (holiday && existing.isPresent() && pickupSlotRepository.existsReservationOn(date) == 1) {
             violations.add(new SaleDateViolation("holiday", Reason.HOLIDAY_HAS_RESERVATIONS,
@@ -98,11 +94,9 @@ public class SaleDateService {
             }
         }
         eventPublisher.publishEvent(CatalogChanged.of(date));
-        return new Result(SaleDateResponse.of(saleDate, pickupSlotRepository.findBySaleDateOrderByPickupAt(date)),
-                existing.isEmpty());
-    }
-
-    private static LocalDateTime toKst(OffsetDateTime time) {
-        return time.atZoneSameInstant(KST).toLocalDateTime();
+        List<LocalTime> pickupTimes = pickupSlotRepository.findBySaleDateOrderByPickupAt(date).stream()
+                .map(slot -> slot.getPickupAt().toLocalTime()).sorted().toList();
+        return new SaleDateResult(saleDate.getSaleDate(), saleDate.getOpenAt(), saleDate.getCloseAt(), saleDate.isHoliday(),
+                pickupTimes, existing.isEmpty());
     }
 }

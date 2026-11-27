@@ -1,13 +1,13 @@
 package com.fivexbread.domain.saledate;
 
+import com.fivexbread.domain.saledate.model.vo.StockRowCommand;
 import com.fivexbread.domain.saledate.model.vo.StockRowError;
-import com.fivexbread.inbound.controller.saledate.model.request.StockRowRequest;
 import static com.fivexbread.domain.saledate.model.vo.StockRowError.Reason.STOCK_BELOW_RESERVED;
 
 import com.fivexbread.common.outbox.OutboxRelay;
+import com.fivexbread.domain.saledate.StockRedisSync.DecreaseResult;
 import com.fivexbread.domain.saledate.StockService.ReservableChange;
 import com.fivexbread.domain.saledate.StockService.Result;
-import com.fivexbread.domain.saledate.StockRedisSync.DecreaseResult;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,7 +35,7 @@ public class StockFacade {
     private final StockRedisSync stockRedisSync;
     private final OutboxRelay outboxRelay;
 
-    public Result put(LocalDate date, int expectedVersion, List<StockRowRequest> rows) {
+    public Result put(LocalDate date, int expectedVersion, List<StockRowCommand> rows) {
         List<ReservableChange> changes = stockService.reservableChanges(date, expectedVersion, rows);
         Map<Long, Integer> decreases = decreases(changes);
 
