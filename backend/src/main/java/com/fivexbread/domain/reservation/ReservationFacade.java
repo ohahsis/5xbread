@@ -5,14 +5,15 @@ import com.fivexbread.common.ErrorCode;
 import com.fivexbread.domain.reservation.ReservationIdempotency.StoredResponse;
 import com.fivexbread.domain.reservation.model.enums.ReservationDbFailure;
 import com.fivexbread.domain.reservation.model.enums.ReservationMode;
+import com.fivexbread.domain.reservation.model.vo.ReservationCommand;
 import com.fivexbread.domain.reservation.model.vo.ReservationPlan;
+import com.fivexbread.domain.reservation.model.vo.ReservationResult;
 import com.fivexbread.domain.reservation.model.vo.StockFailure;
-import com.fivexbread.inbound.controller.reservation.model.request.ReservationCreateRequest;
-import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -47,33 +48,39 @@ public class ReservationFacade {
     private final ReservationProperties properties;
     private final ConnectionPoolStatus poolStatus;
 
-    /** 201 응답. body 는 처음이면 ReservationResponse, 같은 키 재요청이면 저장된 JSON */
+    /** 201 응답. body 는 처음이면 toBody 로 만든 응답, 같은 키 재요청이면 저장된 JSON */
     public record Created(String location, Object body) {
     }
 
-    public Created create(long memberId, String idempotencyKey, ReservationCreateRequest request) {
+    /**
+     * @param toBody 예약 결과 → HTTP 응답 본문. 이 본문을 Idempotency 응답으로 저장해 같은 키 재요청에 그대로 돌려주므로,
+     *               응답 모양은 inbound 가 정해 넘긴다(첫 응답과 재생 응답의 JSON 이 같다)
+     */
+    public Created create(long memberId, String idempotencyKey, ReservationCommand command,
+                          Function<ReservationResult, Object> toBody) {
         rateLimiter.acquire(memberId);
-        String fingerprint = idempotency.fingerprint(memberId, request);
+        String fingerprint = idempotency.fingerprint(memberId, command);
         Optional<StoredResponse> stored = idempotency.begin(idempotencyKey, fingerprint);
         if (stored.isPresent()) {
             return new Created(stored.get().location(), stored.get().body());
         }
 
         try {
-            ReservationPlan plan = ruleService.check(memberId, request);
-            ReservationResponse response = properties.mode() == ReservationMode.DB_ONLY
+            ReservationPlan plan = ruleService.check(memberId, command);
+            ReservationResult result = properties.mode() == ReservationMode.DB_ONLY
                     ? saveWithDbCheck(plan, idempotencyKey)
                     : saveOrCompensate(plan, stockStore.reserve(plan), idempotencyKey);
-            String location = "/api/v1/reservations/" + response.reservationId();
-            afterCommit(idempotencyKey, fingerprint, location, response);
-            return new Created(location, response);
+            String location = "/api/v1/reservations/" + result.reservationId();
+            Object body = toBody.apply(result);
+            afterCommit(idempotencyKey, fingerprint, location, result.reservationId(), body);
+            return new Created(location, body);
         } catch (RuntimeException e) {
             idempotency.release(idempotencyKey, fingerprint);
             throw e;
         }
     }
 
-    private ReservationResponse saveOrCompensate(ReservationPlan plan, String generation, String idempotencyKey) {
+    private ReservationResult saveOrCompensate(ReservationPlan plan, String generation, String idempotencyKey) {
         // 예약번호(Redis INCR, 키가 없으면 DB 조회)는 트랜잭션 전이다. 실패하면 DB 에 쓴 것이 없으니 커밋 여부를 볼 필요가 없다
         String reservationNo;
         try {
@@ -88,7 +95,7 @@ public class ReservationFacade {
         } catch (RuntimeException e) {
             ReservationDbFailure failure = ReservationDbFailure.classify(e);
             if (failure == ReservationDbFailure.UNKNOWN && !poolBusy(plan)) {
-                Optional<ReservationResponse> committed = findCommitted(plan, idempotencyKey);
+                Optional<ReservationResult> committed = findCommitted(plan, idempotencyKey);
                 if (committed.isPresent()) {
                     log.warn("예약 DB 호출이 실패했지만 커밋돼 있어 보상하지 않음 reservationId={} saleDate={} memberId={}",
                             committed.get().reservationId(), plan.saleDate(), plan.memberId(), e);
@@ -139,7 +146,7 @@ public class ReservationFacade {
      * 조회도 실패하면(DB 장애·2초 초과) 커밋되지 않은 것으로 보고 보상한다. 틀려도 Redis 가 느슨해질 뿐, 재고는 조건부 UPDATE 가,
      * 하루 건수·1인 한도는 트랜잭션 안의 DB 재검사가 막는다.
      */
-    private Optional<ReservationResponse> findCommitted(ReservationPlan plan, String idempotencyKey) {
+    private Optional<ReservationResult> findCommitted(ReservationPlan plan, String idempotencyKey) {
         try {
             return queryService.findCreated(plan.memberId(), idempotencyKey);
         } catch (RuntimeException e) {
@@ -150,7 +157,7 @@ public class ReservationFacade {
     }
 
     /** db-only(v1). 실패하면 트랜잭션이 롤백될 뿐 되돌릴 Redis 차감이 없다 */
-    private ReservationResponse saveWithDbCheck(ReservationPlan plan, String idempotencyKey) {
+    private ReservationResult saveWithDbCheck(ReservationPlan plan, String idempotencyKey) {
         try {
             return txService.createDbOnly(plan, numbers.next(plan.saleDate()), idempotencyKey);
         } catch (DataIntegrityViolationException e) {
@@ -179,11 +186,11 @@ public class ReservationFacade {
      * 예약은 이미 저장됐으므로 여기서 실패해도 201 을 돌려준다. 같은 키 재요청은 처리 중 표시가 만료될 때까지(기본 2분) 409,
      * 그 뒤에는 DB UNIQUE 에 걸려 Redis 차감을 되돌리고 422 IDEMPOTENCY_KEY_MISMATCH 다(예약은 1건 그대로).
      */
-    private void afterCommit(String idempotencyKey, String fingerprint, String location, ReservationResponse response) {
+    private void afterCommit(String idempotencyKey, String fingerprint, String location, long reservationId, Object body) {
         try {
-            idempotency.complete(idempotencyKey, fingerprint, location, response);
+            idempotency.complete(idempotencyKey, fingerprint, location, body);
         } catch (RuntimeException e) {
-            log.error("Idempotency 응답 저장 실패 reservationId={}", response.reservationId(), e);
+            log.error("Idempotency 응답 저장 실패 reservationId={}", reservationId, e);
         }
     }
 

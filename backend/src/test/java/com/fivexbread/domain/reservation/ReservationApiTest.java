@@ -4,6 +4,7 @@ import com.fivexbread.inbound.controller.reservation.model.request.ReservationCr
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fivexbread.domain.auth.JwtProvider;
 import com.fivexbread.domain.member.model.enums.Role;
 import com.fivexbread.domain.saledate.SaleDateTestData;
@@ -60,6 +61,9 @@ class ReservationApiTest extends IntegrationTestSupport {
 
     @Autowired
     ReservationIdempotency idempotency;
+
+    @Autowired
+    ObjectMapper objectMapper;
 
     @Autowired
     Clock clock;
@@ -168,6 +172,26 @@ class ReservationApiTest extends IntegrationTestSupport {
         assertThat(otherMember.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
+    /** 재생 응답은 Redis 에 저장한 본문 그대로다. 첫 응답과 글자 단위로 같아야 한다(시각의 +09:00, 필드 순서, 항목 이름까지) */
+    @Test
+    void 같은_키_재요청의_본문은_첫_응답과_글자까지_같고_저장된_본문도_같다() throws Exception {
+        long member = data.memberId();
+        UUID key = UUID.randomUUID();
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(body(Map.of(1L, 1, 3L, 2)), headers(member, key));
+
+        ResponseEntity<String> first = restTemplate.exchange(URL, HttpMethod.POST, request, String.class);
+        ResponseEntity<String> replay = restTemplate.exchange(URL, HttpMethod.POST, request, String.class);
+
+        assertThat(first.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(replay.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(replay.getBody()).isEqualTo(first.getBody());
+        JsonNode body = objectMapper.readTree(first.getBody());
+        assertThat(body.get("pickupAt").asText()).endsWith("+09:00");
+        assertThat(body.get("items")).hasSize(2);
+        JsonNode stored = objectMapper.readTree(redis.opsForValue().get(ReservationIdempotency.redisKey(key.toString())));
+        assertThat(stored.get("body")).isEqualTo(body);
+    }
+
     @Test
     void 실패한_요청의_키는_지워져_같은_키로_다시_시도할_수_있고_처리_중이면_409() {
         long member = data.memberId();
@@ -183,7 +207,7 @@ class ReservationApiTest extends IntegrationTestSupport {
         UUID processing = UUID.randomUUID();
         Map<String, Object> request = body(Map.of(3L, 1));
         String fingerprint = idempotency.fingerprint(member, new ReservationCreateRequest(date, slot,
-                List.of(new ReservationCreateRequest.Item(3L, 1))));
+                List.of(new ReservationCreateRequest.Item(3L, 1))).toCommand());
         redis.opsForValue().set(ReservationIdempotency.redisKey(processing.toString()), "PROCESSING:" + fingerprint);
 
         ResponseEntity<JsonNode> inProgress = post(member, processing, request);
@@ -198,7 +222,7 @@ class ReservationApiTest extends IntegrationTestSupport {
         long member = data.memberId();
         Map<String, Object> request = body(Map.of(3L, 1));
         String fingerprint = idempotency.fingerprint(member, new ReservationCreateRequest(date, slot,
-                List.of(new ReservationCreateRequest.Item(3L, 1))));
+                List.of(new ReservationCreateRequest.Item(3L, 1))).toCommand());
 
         // 처리 중 표시만 남은 상태: release 전에 앱이 죽었거나, Redis 가 멈춘 사이 시간 초과로 끝난 SET NX 가 늦게 실행됨
         UUID stuck = UUID.randomUUID();

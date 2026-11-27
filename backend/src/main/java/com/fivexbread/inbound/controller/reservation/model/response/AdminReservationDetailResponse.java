@@ -1,9 +1,12 @@
 package com.fivexbread.inbound.controller.reservation.model.response;
 
-import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
+import static com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse.toOffset;
+
 import com.fivexbread.common.MaskedName;
 import com.fivexbread.common.MaskedPhone;
 import com.fivexbread.domain.member.model.enums.MemberStatus;
+import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
+import com.fivexbread.domain.reservation.model.vo.AdminReservationDetail;
 import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse.ItemResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
@@ -37,11 +40,20 @@ public record AdminReservationDetailResponse(
     /** 이름·번호는 마스킹한 값 (AU-10). 탈퇴한 회원이면 둘 다 null */
     public record MemberSummary(long memberId, @Schema(nullable = true) MaskedName name, @Schema(nullable = true) MaskedPhone phone,
                                 MemberStatus status) {
+
+        static MemberSummary from(AdminReservationDetail.MemberSummary member) {
+            return new MemberSummary(member.memberId(), member.name(), member.phone(), member.status());
+        }
     }
 
     /** reservation_history 한 줄. 시간순 */
     public record HistoryResponse(@Schema(nullable = true) ReservationStatus fromStatus, ReservationStatus toStatus, ActorType actorType,
                                   OffsetDateTime changedAt) {
+
+        static HistoryResponse from(AdminReservationDetail.History history) {
+            return new HistoryResponse(history.fromStatus(), history.toStatus(),
+                    ActorType.valueOf(history.actorType().name()), toOffset(history.changedAt()));
+        }
     }
 
     /** 상태를 바꾼 주체. 사장님 id·이름은 내보내지 않는다. SYSTEM 은 노쇼 배치 */
@@ -49,5 +61,13 @@ public record AdminReservationDetailResponse(
         CUSTOMER,
         ADMIN,
         SYSTEM
+    }
+
+    public static AdminReservationDetailResponse from(AdminReservationDetail detail) {
+        return new AdminReservationDetailResponse(detail.reservationId(), detail.reservationNo(), detail.status(),
+                detail.saleDate(), detail.pickupSlotId(), toOffset(detail.pickupAt()), toOffset(detail.cancelDeadline()),
+                detail.cancelable(), toOffset(detail.canceledAt()), detail.cancelReason(), toOffset(detail.pickedUpAt()),
+                toOffset(detail.createdAt()), ItemResponse.from(detail.items()), detail.totalPrice(),
+                MemberSummary.from(detail.member()), detail.history().stream().map(HistoryResponse::from).toList());
     }
 }

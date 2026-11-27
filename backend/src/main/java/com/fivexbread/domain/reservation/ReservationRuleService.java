@@ -5,6 +5,7 @@ import com.fivexbread.common.ErrorCode;
 import com.fivexbread.domain.member.model.Member;
 import com.fivexbread.domain.member.model.enums.MemberStatus;
 import com.fivexbread.domain.member.repository.MemberRepository;
+import com.fivexbread.domain.reservation.model.vo.ReservationCommand;
 import com.fivexbread.domain.reservation.model.vo.ReservationPlan;
 import com.fivexbread.domain.saledate.model.PickupSlot;
 import com.fivexbread.domain.saledate.model.SaleDate;
@@ -12,7 +13,6 @@ import com.fivexbread.domain.saledate.model.vo.SaleBreadRow;
 import com.fivexbread.domain.saledate.repository.DailyStockRepository;
 import com.fivexbread.domain.saledate.repository.PickupSlotRepository;
 import com.fivexbread.domain.saledate.repository.SaleDateRepository;
-import com.fivexbread.inbound.controller.reservation.model.request.ReservationCreateRequest;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -43,10 +43,10 @@ public class ReservationRuleService {
     private final ReservationProperties properties;
     private final Clock clock;
 
-    ReservationPlan check(long memberId, ReservationCreateRequest request) {
+    ReservationPlan check(long memberId, ReservationCommand command) {
         // 기간 검증: 판매일 존재(404), 오픈 전·마감·휴무일
         LocalDateTime now = LocalDateTime.now(clock);
-        LocalDate date = request.saleDate();
+        LocalDate date = command.saleDate();
         SaleDate saleDate = saleDateRepository.findById(date)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         switch (saleDate.status(now)) {
@@ -57,13 +57,13 @@ public class ReservationRuleService {
         }
         // 소속 검증: 시간대와 빵이 그 판매일에 속하는지
         // 본문의 시간대·빵은 없는 id 여도 404 가 아니라 업무 규칙 위반 422 (URL 자원이 아님)
-        PickupSlot slot = pickupSlotRepository.findById(request.pickupSlotId())
+        PickupSlot slot = pickupSlotRepository.findById(command.pickupSlotId())
                 .filter(found -> found.getSaleDate().equals(date))
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_PICKUP_SLOT));
 
         Map<Long, SaleBreadRow> breads = dailyStockRepository.findSaleBreads(date).stream() // 그 날 팔 수 있는 빵 목록을 DB 에서 읽어 breadId -> 빵 정보 Map 으로 만든다.
                 .collect(Collectors.toMap(SaleBreadRow::breadId, Function.identity()));
-        List<Map<String, Long>> unavailable = request.items().stream()  // 손님이 요청한 빵 중에서 그날 목록에 없는 빵만 전부 모은다.(장바구니 화면에 표시 가능)
+        List<Map<String, Long>> unavailable = command.items().stream()  // 손님이 요청한 빵 중에서 그날 목록에 없는 빵만 전부 모은다.(장바구니 화면에 표시 가능)
                 .filter(item -> !breads.containsKey(item.breadId()))
                 .map(item -> Map.of("breadId", item.breadId()))
                 .toList();
@@ -72,7 +72,7 @@ public class ReservationRuleService {
         }
 
         // 한도 검증: 1건 20개만 여기서 본다. 1인 한도·하루 3건은 재고 차감과 함께 Lua 에서 원자적으로 본다
-        long totalQuantity = request.items().stream().mapToLong(ReservationCreateRequest.Item::quantity).sum();
+        long totalQuantity = command.items().stream().mapToLong(ReservationCommand.Item::quantity).sum();
         if (totalQuantity > properties.maxTotalQuantity()) {
             throw new BusinessException(ErrorCode.TOTAL_QUANTITY_EXCEEDED,
                     "예약 1건에 최대 " + properties.maxTotalQuantity() + "개까지 담을 수 있습니다");
@@ -87,8 +87,8 @@ public class ReservationRuleService {
             throw new BusinessException(ErrorCode.RESERVATION_BLOCKED, null, Map.of("blockedUntil", blockedUntil));
         }
 
-        List<ReservationPlan.Item> items = request.items().stream()
-                .sorted(Comparator.comparing(ReservationCreateRequest.Item::breadId))   // breadId 로 정렬. 데드락의 순환 대기 없앰
+        List<ReservationPlan.Item> items = command.items().stream()
+                .sorted(Comparator.comparing(ReservationCommand.Item::breadId))   // breadId 로 정렬. 데드락의 순환 대기 없앰
                 .map(item -> {
                     SaleBreadRow bread = breads.get(item.breadId());
                     return new ReservationPlan.Item(item.breadId(), bread.name(), bread.price(), item.quantity(),

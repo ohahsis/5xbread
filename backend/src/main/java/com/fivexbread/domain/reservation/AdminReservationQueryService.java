@@ -1,22 +1,21 @@
 package com.fivexbread.domain.reservation;
 
-import com.fivexbread.domain.reservation.model.Reservation;
-import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
-import com.fivexbread.domain.reservation.model.vo.AdminReservationCursor;
-import com.fivexbread.inbound.controller.reservation.model.response.AdminReservationDetailResponse;
-import com.fivexbread.inbound.controller.reservation.model.response.AdminReservationListResponse;
-import com.fivexbread.inbound.controller.reservation.model.response.AdminReservationResponse;
-import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
 import com.fivexbread.common.MaskedName;
 import com.fivexbread.common.MaskedPhone;
 import com.fivexbread.domain.member.model.enums.MemberStatus;
 import com.fivexbread.domain.member.model.enums.Role;
-import com.fivexbread.inbound.controller.reservation.model.response.AdminReservationDetailResponse.ActorType;
-import com.fivexbread.inbound.controller.reservation.model.response.AdminReservationDetailResponse.HistoryResponse;
-import com.fivexbread.inbound.controller.reservation.model.response.AdminReservationDetailResponse.MemberSummary;
-import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse.ItemResponse;
+import com.fivexbread.domain.reservation.model.Reservation;
+import com.fivexbread.domain.reservation.model.enums.HistoryActorType;
+import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
+import com.fivexbread.domain.reservation.model.vo.AdminReservationCard;
+import com.fivexbread.domain.reservation.model.vo.AdminReservationCursor;
+import com.fivexbread.domain.reservation.model.vo.AdminReservationDetail.History;
+import com.fivexbread.domain.reservation.model.vo.AdminReservationDetail.MemberSummary;
+import com.fivexbread.domain.reservation.model.vo.AdminReservationDetail;
+import com.fivexbread.domain.reservation.model.vo.AdminReservationPage;
+import com.fivexbread.domain.reservation.model.vo.ReservationLine;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Clock;
@@ -54,7 +53,7 @@ public class AdminReservationQueryService {
 
     /** @param status null 이면 상태와 상관없이 */
     @Transactional(readOnly = true)
-    public List<AdminReservationResponse> search(LocalDate saleDate, String reservationNo, String phoneLast4,
+    public List<AdminReservationCard> search(LocalDate saleDate, String reservationNo, String phoneLast4,
                                                  ReservationStatus status) {
         StringBuilder sql = new StringBuilder(CARD_COLUMNS).append("""
 
@@ -78,7 +77,7 @@ public class AdminReservationQueryService {
 
     /** QR 검증 (C-07). 서명으로 확인한 판매일·예약번호의 예약 */
     @Transactional(readOnly = true)
-    public Optional<AdminReservationResponse> find(LocalDate saleDate, String reservationNo) {
+    public Optional<AdminReservationCard> find(LocalDate saleDate, String reservationNo) {
         return search(saleDate, reservationNo, null, null).stream().findFirst();
     }
 
@@ -91,7 +90,7 @@ public class AdminReservationQueryService {
      * @param cursor       첫 페이지면 null
      */
     @Transactional(readOnly = true)
-    public AdminReservationListResponse list(LocalDate saleDate, ReservationStatus status, Long pickupSlotId,
+    public AdminReservationPage list(LocalDate saleDate, ReservationStatus status, Long pickupSlotId,
                                              AdminReservationCursor cursor, int size) {
         MapSqlParameterSource params = new MapSqlParameterSource("saleDate", saleDate).addValue("limit", size + 1);
         if (status != null) {
@@ -110,7 +109,7 @@ public class AdminReservationQueryService {
         String nextCursor = hasNext
                 ? new AdminReservationCursor(page.getLast().pickupAt(), page.getLast().reservationNo()).encode()
                 : null;
-        return new AdminReservationListResponse(cards(page), nextCursor, hasNext);
+        return new AdminReservationPage(cards(page), nextCursor, hasNext);
     }
 
     /**
@@ -139,7 +138,7 @@ public class AdminReservationQueryService {
 
     /** 사장님 예약 상세. 없으면 404 */
     @Transactional(readOnly = true)
-    public AdminReservationDetailResponse detail(long reservationId) {
+    public AdminReservationDetail detail(long reservationId) {
         Map<String, Object> id = Map.of("id", reservationId);
         DetailRow row = jdbcTemplate.query("""
                 SELECT r.id, r.reservation_no, r.status, r.sale_date, r.pickup_slot_id, r.pickup_at, r.total_price,
@@ -149,37 +148,34 @@ public class AdminReservationQueryService {
         if (row == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-        List<ItemResponse> items = reservationItems.of(reservationId);
+        List<ReservationLine> items = reservationItems.of(reservationId);
         // actor_id 가 없으면 시스템(노쇼 배치). 사장님 id·이름은 내보내지 않고 역할만
-        List<HistoryResponse> history = jdbcTemplate.query("""
+        List<History> history = jdbcTemplate.query("""
                 SELECT h.from_status, h.to_status, h.actor_id, a.role, h.changed_at
                 FROM reservation_history h LEFT JOIN member a ON a.id = h.actor_id
-                WHERE h.reservation_id = :id ORDER BY h.changed_at, h.id""", id, (rs, i) -> new HistoryResponse(
+                WHERE h.reservation_id = :id ORDER BY h.changed_at, h.id""", id, (rs, i) -> new History(
                 status(rs.getString(1)), status(rs.getString(2)), actorType(rs.getObject(3), rs.getString(4)),
-                ReservationResponse.toOffset(rs.getObject(5, LocalDateTime.class))));
+                rs.getObject(5, LocalDateTime.class)));
 
         LocalDateTime cancelDeadline = Reservation.cancelDeadline(row.pickupAt());
         boolean cancelable = Reservation.cancelable(row.status(), row.pickupAt(), LocalDateTime.now(clock));
         MemberSummary member = new MemberSummary(row.memberId(), maskedName(row.name(), row.memberStatus()),
                 maskedPhone(row.phone()), row.memberStatus());
-        return new AdminReservationDetailResponse(row.id(), row.reservationNo(), row.status(), row.saleDate(),
-                row.pickupSlotId(), ReservationResponse.toOffset(row.pickupAt()),
-                ReservationResponse.toOffset(cancelDeadline), cancelable,
-                ReservationResponse.toOffset(row.canceledAt()), row.cancelReason(),
-                ReservationResponse.toOffset(row.pickedUpAt()), ReservationResponse.toOffset(row.createdAt()),
-                items, row.totalPrice(), member, history);
+        return new AdminReservationDetail(row.id(), row.reservationNo(), row.status(), row.saleDate(),
+                row.pickupSlotId(), row.pickupAt(), cancelDeadline, cancelable, row.canceledAt(), row.cancelReason(),
+                row.pickedUpAt(), row.createdAt(), items, row.totalPrice(), member, history);
     }
 
-    private List<AdminReservationResponse> cards(List<CardRow> rows) {
-        Map<Long, List<ItemResponse>> items = reservationItems.of(rows.stream().map(CardRow::id).toList());
-        List<AdminReservationResponse> responses = new ArrayList<>();
+    private List<AdminReservationCard> cards(List<CardRow> rows) {
+        Map<Long, List<ReservationLine>> items = reservationItems.of(rows.stream().map(CardRow::id).toList());
+        List<AdminReservationCard> cards = new ArrayList<>();
         for (CardRow row : rows) {
-            responses.add(new AdminReservationResponse(row.id(), row.reservationNo(), row.status(), row.saleDate(),
-                    row.pickupSlotId(), ReservationResponse.toOffset(row.pickupAt()),
+            cards.add(new AdminReservationCard(row.id(), row.reservationNo(), row.status(), row.saleDate(),
+                    row.pickupSlotId(), row.pickupAt(),
                     maskedName(row.name(), row.memberStatus()), maskedPhone(row.phone()),
                     items.getOrDefault(row.id(), List.of()), row.totalPrice()));
         }
-        return responses;
+        return cards;
     }
 
     // 탈퇴 회원의 이름은 "탈퇴회원"으로 바뀌어 있다(AU-07). 마스킹하면 "탈**원"이 되므로 번호처럼 null 로 내보낸다
@@ -191,11 +187,11 @@ public class AdminReservationQueryService {
         return phone == null ? null : MaskedPhone.from(phone);
     }
 
-    private static ActorType actorType(Object actorId, String role) {
+    private static HistoryActorType actorType(Object actorId, String role) {
         if (actorId == null) {
-            return ActorType.SYSTEM;
+            return HistoryActorType.SYSTEM;
         }
-        return Role.ADMIN.name().equals(role) ? ActorType.ADMIN : ActorType.CUSTOMER;
+        return Role.ADMIN.name().equals(role) ? HistoryActorType.ADMIN : HistoryActorType.CUSTOMER;
     }
 
     private static ReservationStatus status(String value) {

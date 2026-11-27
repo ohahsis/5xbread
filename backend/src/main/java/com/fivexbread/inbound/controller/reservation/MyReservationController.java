@@ -1,13 +1,13 @@
 package com.fivexbread.inbound.controller.reservation;
 
+import com.fivexbread.common.BusinessException;
+import com.fivexbread.common.ErrorCode;
+import com.fivexbread.domain.auth.model.vo.AuthMember;
+import com.fivexbread.domain.reservation.ReservationQueryService;
+import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
 import com.fivexbread.domain.reservation.model.vo.ReservationCursor;
 import com.fivexbread.inbound.controller.reservation.model.response.ReservationDetailResponse;
 import com.fivexbread.inbound.controller.reservation.model.response.ReservationListResponse;
-import com.fivexbread.domain.reservation.ReservationQueryService;
-import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
-import com.fivexbread.domain.auth.model.vo.AuthMember;
-import com.fivexbread.common.BusinessException;
-import com.fivexbread.common.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,13 +36,13 @@ public class MyReservationController {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "size 는 1 이상 " + MAX_SIZE + " 이하입니다");
         }
         ReservationCursor position = cursor == null || cursor.isEmpty() ? null : ReservationCursor.decode(cursor);
-        return reservationQueryService.list(member.memberId(), status, position, size);
+        return ReservationListResponse.from(reservationQueryService.list(member.memberId(), status, position, size));
     }
 
     /** 남의 예약은 404 (존재 여부를 숨김). 사장님은 /admin/reservations/{id} 로 본다 */
     @GetMapping("/reservations/{reservationId}")
     public ReservationDetailResponse detail(@AuthenticationPrincipal AuthMember member,
                                             @PathVariable long reservationId) {
-        return reservationQueryService.detail(reservationId, member.memberId());
+        return ReservationDetailResponse.from(reservationQueryService.detail(reservationId, member.memberId()));
     }
 }

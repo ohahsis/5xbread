@@ -1,10 +1,9 @@
 package com.fivexbread.domain.reservation;
 
 import com.fivexbread.domain.reservation.model.Reservation;
+import com.fivexbread.domain.reservation.model.vo.AdminReservationCard;
+import com.fivexbread.domain.reservation.model.vo.IssuedPickupCode;
 import com.fivexbread.domain.reservation.repository.ReservationRepository;
-import com.fivexbread.inbound.controller.reservation.model.response.AdminReservationResponse;
-import com.fivexbread.inbound.controller.reservation.model.response.PickupCodeResponse;
-import static com.fivexbread.common.Times.KST;
 
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
@@ -29,16 +28,16 @@ public class PickupCodeService {
 
     /** 손님 본인 예약만. 남의 예약·없는 예약은 구분하지 않고 404 */
     @Transactional(readOnly = true)
-    public PickupCodeResponse issue(long reservationId, long memberId) {
+    public IssuedPickupCode issue(long reservationId, long memberId) {
         Reservation reservation = reservationRepository.findByIdAndMemberId(reservationId, memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         Issued issued = pickupCodes.issue(reservation.getSaleDate(), reservation.getReservationNo());
-        return new PickupCodeResponse(issued.code(), issued.expiresAt().atZone(KST).toOffsetDateTime());
+        return new IssuedPickupCode(issued.code(), issued.expiresAt());
     }
 
     /** 형식·서명·만료가 틀렸거나 그 예약이 없으면 모두 422 INVALID_PICKUP_CODE. 상태(이미 수령·취소)는 응답의 status 로 보여준다 */
     @Transactional(readOnly = true)
-    public AdminReservationResponse verify(String code) {
+    public AdminReservationCard verify(String code) {
         return pickupCodes.verify(code, clock.instant())
                 .flatMap(verified -> queryService.find(verified.saleDate(), verified.reservationNo()))
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_PICKUP_CODE));

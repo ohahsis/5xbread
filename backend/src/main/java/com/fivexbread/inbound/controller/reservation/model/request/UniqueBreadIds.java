@@ -1,4 +1,4 @@
-package com.fivexbread.domain.reservation;
+package com.fivexbread.inbound.controller.reservation.model.request;
 
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;

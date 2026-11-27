@@ -1,6 +1,9 @@
 package com.fivexbread.inbound.controller.reservation.model.response;
 
+import static com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse.toOffset;
+
 import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
+import com.fivexbread.domain.reservation.model.vo.AdminReservationCard;
 import io.swagger.v3.oas.annotations.media.Schema;
 import com.fivexbread.common.MaskedName;
 import com.fivexbread.common.MaskedPhone;
@@ -25,4 +28,10 @@ public record AdminReservationResponse(
         List<ItemResponse> items,
         int totalPrice
 ) {
+
+    public static AdminReservationResponse from(AdminReservationCard card) {
+        return new AdminReservationResponse(card.reservationId(), card.reservationNo(), card.status(), card.saleDate(),
+                card.pickupSlotId(), toOffset(card.pickupAt()), card.memberName(), card.phone(),
+                ItemResponse.from(card.items()), card.totalPrice());
+    }
 }

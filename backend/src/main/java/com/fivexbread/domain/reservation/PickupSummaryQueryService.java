@@ -1,10 +1,7 @@
 package com.fivexbread.domain.reservation;
 
 import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
-import com.fivexbread.inbound.controller.reservation.model.response.PickupSummaryResponse;
-import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse;
-import com.fivexbread.inbound.controller.reservation.model.response.PickupSummaryResponse.BreadQuantityResponse;
-import com.fivexbread.inbound.controller.reservation.model.response.PickupSummaryResponse.SlotSummary;
+import com.fivexbread.domain.reservation.model.vo.PickupSummary;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -45,7 +42,7 @@ public class PickupSummaryQueryService {
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     @Transactional(readOnly = true)
-    public PickupSummaryResponse summary(LocalDate saleDate, ReservationStatus status) {
+    public PickupSummary summary(LocalDate saleDate, ReservationStatus status) {
         MapSqlParameterSource params = new MapSqlParameterSource("saleDate", saleDate).addValue("status", status.name());
         List<Row> rows = jdbcTemplate.query(QUANTITY_SQL, params, (rs, i) -> new Row(rs.getLong(1),
                 rs.getObject(2, LocalDateTime.class), rs.getLong(3), rs.getString(4), rs.getInt(5), rs.getInt(6)));
@@ -60,18 +57,18 @@ public class PickupSummaryQueryService {
                 .sorted(Comparator.comparing(Row::pickupAt).thenComparing(breadOrder))
                 .forEach(row -> bySlot.computeIfAbsent(row.slotId(), id -> new ArrayList<>()).add(row));
 
-        List<SlotSummary> slots = bySlot.entrySet().stream()
-                .map(entry -> new SlotSummary(entry.getKey(),
-                        ReservationResponse.toOffset(entry.getValue().getFirst().pickupAt()),
+        List<PickupSummary.Slot> slots = bySlot.entrySet().stream()
+                .map(entry -> new PickupSummary.Slot(entry.getKey(),
+                        entry.getValue().getFirst().pickupAt(),
                         counts.getOrDefault(entry.getValue().getFirst().pickupAt(), 0),
-                        entry.getValue().stream().map(Row::toResponse).toList()))
+                        entry.getValue().stream().map(Row::toBread).toList()))
                 .toList();
 
         Map<Long, Row> totals = new LinkedHashMap<>();
         rows.stream().sorted(breadOrder).forEach(row -> totals.merge(row.breadId(), row,
                 (sum, next) -> sum.plus(next.quantity())));
-        return new PickupSummaryResponse(saleDate, status, slots,
-                totals.values().stream().map(Row::toResponse).toList());
+        return new PickupSummary(saleDate, status, slots,
+                totals.values().stream().map(Row::toBread).toList());
     }
 
     private record Row(long slotId, LocalDateTime pickupAt, long breadId, String name, int displayOrder, int quantity) {
@@ -80,8 +77,8 @@ public class PickupSummaryQueryService {
             return new Row(slotId, pickupAt, breadId, name, displayOrder, quantity + more);
         }
 
-        BreadQuantityResponse toResponse() {
-            return new BreadQuantityResponse(breadId, name, quantity);
+        PickupSummary.Bread toBread() {
+            return new PickupSummary.Bread(breadId, name, quantity);
         }
     }
 }

@@ -1,6 +1,6 @@
 package com.fivexbread.inbound.controller.reservation.model.request;
 
-import com.fivexbread.domain.reservation.UniqueBreadIds;
+import com.fivexbread.domain.reservation.model.vo.ReservationCommand;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -16,5 +16,10 @@ public record ReservationCreateRequest(
 ) {
 
     public record Item(@NotNull Long breadId, @Positive int quantity) {
+    }
+
+    public ReservationCommand toCommand() {
+        return new ReservationCommand(saleDate, pickupSlotId,
+                items.stream().map(item -> new ReservationCommand.Item(item.breadId(), item.quantity())).toList());
     }
 }

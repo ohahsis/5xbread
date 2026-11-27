@@ -1,6 +1,9 @@
 package com.fivexbread.inbound.controller.reservation.model.response;
 
+import static com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse.toOffset;
+
 import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
+import com.fivexbread.domain.reservation.model.vo.PickupSummary;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -15,8 +18,23 @@ public record PickupSummaryResponse(LocalDate saleDate, ReservationStatus status
     /** @param reservationCount 이 시간대에 포장할 예약(봉투) 수 */
     public record SlotSummary(long pickupSlotId, OffsetDateTime pickupAt, int reservationCount,
                               List<BreadQuantityResponse> breads) {
+
+        static SlotSummary from(PickupSummary.Slot slot) {
+            return new SlotSummary(slot.pickupSlotId(), toOffset(slot.pickupAt()), slot.reservationCount(),
+                    BreadQuantityResponse.from(slot.breads()));
+        }
     }
 
     public record BreadQuantityResponse(long breadId, String name, int quantity) {
+
+        static List<BreadQuantityResponse> from(List<PickupSummary.Bread> breads) {
+            return breads.stream().map(bread -> new BreadQuantityResponse(bread.breadId(), bread.name(), bread.quantity()))
+                    .toList();
+        }
+    }
+
+    public static PickupSummaryResponse from(PickupSummary summary) {
+        return new PickupSummaryResponse(summary.saleDate(), summary.status(),
+                summary.slots().stream().map(SlotSummary::from).toList(), BreadQuantityResponse.from(summary.totals()));
     }
 }
