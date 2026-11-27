@@ -1,11 +1,10 @@
 package com.fivexbread.domain.catalog;
 
-import com.fivexbread.domain.catalog.model.Bread;
-import com.fivexbread.domain.catalog.repository.BreadRepository;
-import com.fivexbread.inbound.controller.catalog.model.request.BreadCreateRequest;
-import com.fivexbread.inbound.controller.catalog.model.request.BreadUpdateRequest;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
+import com.fivexbread.domain.catalog.model.Bread;
+import com.fivexbread.domain.catalog.model.vo.BreadCommand;
+import com.fivexbread.domain.catalog.repository.BreadRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -32,7 +31,7 @@ public class BreadService {
     }
 
     @Transactional
-    public Bread register(BreadCreateRequest request) {
+    public Bread register(BreadCommand request) {
         checkActiveLimit();
         if (breadRepository.existsByActiveName(Bread.activeNameOf(request.name()))) {
             throw new BusinessException(ErrorCode.DUPLICATE_BREAD_NAME);
@@ -43,7 +42,7 @@ public class BreadService {
     }
 
     @Transactional
-    public Bread update(long breadId, BreadUpdateRequest request) {
+    public Bread update(long breadId, BreadCommand request) {
         Bread bread = breadRepository.findById(breadId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         boolean reactivating = Boolean.TRUE.equals(request.active()) && !bread.isActive();

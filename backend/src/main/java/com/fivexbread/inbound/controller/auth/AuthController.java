@@ -1,10 +1,10 @@
 package com.fivexbread.inbound.controller.auth;
 
-import com.fivexbread.inbound.controller.auth.model.response.AccessTokenResponse;
 import com.fivexbread.domain.auth.AuthFacade;
+import com.fivexbread.domain.auth.RefreshTokenCookie;
 import com.fivexbread.domain.auth.model.vo.IssuedTokens;
 import com.fivexbread.inbound.controller.auth.model.request.LoginRequest;
-import com.fivexbread.domain.auth.RefreshTokenCookie;
+import com.fivexbread.inbound.controller.auth.model.response.AccessTokenResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
@@ -32,10 +32,10 @@ public class AuthController {
     @PostMapping
     @ApiResponse(responseCode = "201", description = "로그인함. Refresh Token 은 Set-Cookie(HttpOnly)로만")
     public ResponseEntity<AccessTokenResponse> login(@Valid @RequestBody LoginRequest request) {
-        IssuedTokens tokens = authFacade.login(request);
+        IssuedTokens tokens = authFacade.login(request.phone(), request.password());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .header(HttpHeaders.SET_COOKIE, refreshCookie(tokens))
-                .body(tokens.toResponse());
+                .body(AccessTokenResponse.from(tokens));
     }
 
     /**
@@ -51,7 +51,7 @@ public class AuthController {
         IssuedTokens tokens = authFacade.reissue(refreshToken);
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, refreshCookie(tokens))
-                .body(tokens.toResponse());
+                .body(AccessTokenResponse.from(tokens));
     }
 
     /**

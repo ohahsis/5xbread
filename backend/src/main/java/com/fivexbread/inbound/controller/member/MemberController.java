@@ -4,8 +4,8 @@ import com.fivexbread.domain.member.MemberFacade;
 import com.fivexbread.domain.member.MemberService;
 import com.fivexbread.inbound.controller.member.model.request.MyInfoPatch;
 import com.fivexbread.inbound.controller.member.model.request.MyInfoPatchBody;
-import com.fivexbread.inbound.controller.member.model.response.MyInfoResponse;
 import com.fivexbread.inbound.controller.member.model.request.SignupRequest;
+import com.fivexbread.inbound.controller.member.model.response.MyInfoResponse;
 import com.fivexbread.inbound.controller.member.model.response.SignupResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -48,14 +48,14 @@ public class MemberController {
     @ApiResponse(responseCode = "201", description = "가입함. Location: /api/v1/members/{id}")
     public ResponseEntity<SignupResponse> signUp(@Valid @RequestBody SignupRequest request,
                                                  HttpServletRequest httpRequest) {
-        SignupResponse response = memberFacade.signUp(request, httpRequest.getRemoteAddr());
+        SignupResponse response = SignupResponse.from(memberFacade.signUp(request.toCommand(), httpRequest.getRemoteAddr()));
         return ResponseEntity.created(URI.create("/api/v1/members/" + response.memberId())).body(response);
     }
 
     /** 내 정보 (U-10). 탈퇴한 회원의 남은 Access Token 이면 401 */
     @GetMapping("/me")
     public MyInfoResponse me(@AuthenticationPrincipal AuthMember member) {
-        return memberService.myInfo(member.memberId());
+        return MyInfoResponse.from(memberService.myInfo(member.memberId()));
     }
 
     /** 이름 수정 (C-10). {"name": "..."} 만 받는다. 규칙은 가입과 같다(앞뒤 공백 제거 후 한글·영문 2~20자) */
@@ -63,6 +63,6 @@ public class MemberController {
     public MyInfoResponse patch(@AuthenticationPrincipal AuthMember member,
                                 @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(mediaType = ReservationController.MERGE_PATCH_JSON, schema = @Schema(implementation = MyInfoPatchBody.class)))
                                 @RequestBody Map<String, Object> body) {
-        return memberService.rename(member.memberId(), MyInfoPatch.name(body, validator));
+        return MyInfoResponse.from(memberService.rename(member.memberId(), MyInfoPatch.name(body, validator)));
     }
 }

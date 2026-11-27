@@ -1,8 +1,7 @@
 package com.fivexbread.domain.member;
 
 import com.fivexbread.domain.member.model.Member;
-import com.fivexbread.inbound.controller.member.model.request.SignupRequest;
-import com.fivexbread.inbound.controller.member.model.response.SignupResponse;
+import com.fivexbread.domain.member.model.vo.SignupCommand;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -20,11 +19,10 @@ public class MemberFacade {
     private final MemberService memberService;
     private final WithdrawnPhoneHasher withdrawnPhoneHasher;
 
-    public SignupResponse signUp(SignupRequest request, String clientIp) {
+    public Member signUp(SignupCommand command, String clientIp) {
         signupRateLimiter.acquire(clientIp);
-        memberService.checkRejoin(withdrawnPhoneHasher.hash(request.phone()));
-        String passwordHash = passwordEncoder.encode(request.password());
-        Member member = memberService.signUp(request.phone(), passwordHash, request.name());
-        return SignupResponse.from(member);
+        memberService.checkRejoin(withdrawnPhoneHasher.hash(command.phone()));
+        String passwordHash = passwordEncoder.encode(command.password());
+        return memberService.signUp(command.phone(), passwordHash, command.name());
     }
 }

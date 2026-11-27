@@ -1,5 +1,6 @@
 package com.fivexbread.inbound.controller.admin.model.response;
 
+import com.fivexbread.domain.admin.model.vo.AdminMemberResult;
 import io.swagger.v3.oas.annotations.media.Schema;
 import com.fivexbread.common.MaskedPhone;
 import com.fivexbread.domain.member.model.Member;
@@ -18,7 +19,7 @@ public record AdminMemberResponse(long memberId, String name, MaskedPhone phone,
                 member.getReservationBlockedUntil());
     }
 
-    public AdminMemberResponse withoutBlock() {
-        return new AdminMemberResponse(memberId, name, phone, null);
+    public static AdminMemberResponse from(AdminMemberResult result) {
+        return new AdminMemberResponse(result.memberId(), result.name(), result.phone(), result.reservationBlockedUntil());
     }
 }
