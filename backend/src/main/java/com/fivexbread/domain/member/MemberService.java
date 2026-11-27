@@ -1,17 +1,15 @@
 package com.fivexbread.domain.member;
 
+import com.fivexbread.common.BusinessException;
+import com.fivexbread.common.ErrorCode;
+import com.fivexbread.config.ClockConfig;
 import com.fivexbread.domain.member.model.Member;
 import com.fivexbread.domain.member.model.MemberAgreement;
 import com.fivexbread.domain.member.model.enums.MemberStatus;
 import com.fivexbread.domain.member.model.enums.Role;
 import com.fivexbread.domain.member.repository.MemberAgreementRepository;
 import com.fivexbread.domain.member.repository.MemberRepository;
-import com.fivexbread.config.SignupProperties;
-import com.fivexbread.config.WithdrawalProperties;
 import com.fivexbread.inbound.controller.member.model.response.MyInfoResponse;
-import com.fivexbread.common.BusinessException;
-import com.fivexbread.config.ClockConfig;
-import com.fivexbread.common.ErrorCode;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Map;

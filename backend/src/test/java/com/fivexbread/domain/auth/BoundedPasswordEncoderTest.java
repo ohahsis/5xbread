@@ -1,6 +1,6 @@
 package com.fivexbread.domain.auth;
 
-import com.fivexbread.config.PasswordHashProperties;
+import com.fivexbread.config.security.PasswordHashProperties;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 

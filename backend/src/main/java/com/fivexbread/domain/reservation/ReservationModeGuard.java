@@ -1,7 +1,6 @@
 package com.fivexbread.domain.reservation;
 
 import com.fivexbread.domain.reservation.model.enums.ReservationMode;
-import com.fivexbread.config.ReservationProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;

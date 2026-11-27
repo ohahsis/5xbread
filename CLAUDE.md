@@ -30,7 +30,8 @@ Spring Security + JWT, STOMP WebSocket, Testcontainers
   - Enum → `domain.{도메인}.model.enums`
   - 불변 값(record)·쿼리 프로젝션·커서 → `domain.{도메인}.model.vo`
   - Repository → `domain.{도메인}.repository`
-  - `@Configuration`·`*Properties` → `config`
+  - 업무 설정값 `*Properties`(한도·기간·비밀값 등) → 그 값을 쓰는 `domain.{도메인}` 바로 아래 (아웃박스는 `common.outbox`)
+  - 인프라 `@Configuration`과 그 설정값 → `config.{기술}`(`security`, `websocket`, `redis`, `scheduling`, `openapi`). 기술 하나에 묶이지 않는 것(`ClockConfig`)만 `config` 루트
   - 도메인과 무관한 공통 코드 → `common` (아웃박스는 `common.outbox`)
   - STOMP·실시간 발행 → `realtime`
   - 스케줄 작업 → `batch`

@@ -1,4 +1,4 @@
-package com.fivexbread.config;
+package com.fivexbread.config.openapi;
 
 import com.fivexbread.common.ErrorCode;
 import io.swagger.v3.oas.models.OpenAPI;

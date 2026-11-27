@@ -1,15 +1,14 @@
 package com.fivexbread.domain.reservation;
 
+import com.fivexbread.common.BusinessException;
+import com.fivexbread.common.ErrorCode;
+import com.fivexbread.domain.reservation.ReservationIdempotency.StoredResponse;
 import com.fivexbread.domain.reservation.model.enums.ReservationDbFailure;
 import com.fivexbread.domain.reservation.model.enums.ReservationMode;
 import com.fivexbread.domain.reservation.model.vo.ReservationPlan;
 import com.fivexbread.domain.reservation.model.vo.StockFailure;
-import com.fivexbread.config.ReservationProperties;
 import com.fivexbread.inbound.controller.reservation.model.request.ReservationCreateRequest;
 import com.fivexbread.inbound.controller.reservation.model.response.ReservationResponse;
-import com.fivexbread.common.BusinessException;
-import com.fivexbread.common.ErrorCode;
-import com.fivexbread.domain.reservation.ReservationIdempotency.StoredResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;

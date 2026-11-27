@@ -1,15 +1,14 @@
 package com.fivexbread.domain.reservation;
 
+import com.fivexbread.common.BusinessException;
+import com.fivexbread.common.ErrorCode;
 import com.fivexbread.domain.reservation.model.vo.ReservationPlan;
 import com.fivexbread.domain.reservation.model.vo.StockFailure;
 import com.fivexbread.domain.reservation.repository.ReservationRepository;
-import com.fivexbread.config.ReservationProperties;
-import com.fivexbread.common.BusinessException;
-import com.fivexbread.common.ErrorCode;
-import com.fivexbread.domain.saledate.model.vo.BreadQuantity;
-import com.fivexbread.domain.saledate.repository.DailyStockRepository;
 import com.fivexbread.domain.saledate.StockKeys;
 import com.fivexbread.domain.saledate.StockRedisSync;
+import com.fivexbread.domain.saledate.model.vo.BreadQuantity;
+import com.fivexbread.domain.saledate.repository.DailyStockRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;

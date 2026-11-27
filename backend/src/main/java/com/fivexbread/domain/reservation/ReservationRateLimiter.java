@@ -1,6 +1,5 @@
 package com.fivexbread.domain.reservation;
 
-import com.fivexbread.config.ReservationProperties;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
 import java.time.Clock;

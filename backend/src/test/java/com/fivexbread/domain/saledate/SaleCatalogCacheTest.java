@@ -1,9 +1,9 @@
 package com.fivexbread.domain.saledate;
 
+import com.fivexbread.config.redis.CatalogCacheProperties;
 import com.fivexbread.domain.saledate.model.vo.SaleBreadRow;
 import com.fivexbread.domain.saledate.repository.DailyStockRepository;
 import com.fivexbread.domain.saledate.repository.SaleDateRepository;
-import com.fivexbread.config.CatalogCacheProperties;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;

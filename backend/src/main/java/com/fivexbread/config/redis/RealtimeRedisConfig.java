@@ -1,7 +1,8 @@
-package com.fivexbread.config;
+package com.fivexbread.config.redis;
 
-import com.fivexbread.realtime.StockBroadcaster;
+import com.fivexbread.config.websocket.RealtimeProperties;
 import com.fivexbread.domain.saledate.StockKeys;
+import com.fivexbread.realtime.StockBroadcaster;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;

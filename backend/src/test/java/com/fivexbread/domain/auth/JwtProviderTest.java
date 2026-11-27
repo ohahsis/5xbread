@@ -1,12 +1,12 @@
 package com.fivexbread.domain.auth;
 
+import com.fivexbread.config.security.JwtProperties;
 import com.fivexbread.domain.auth.model.vo.AuthMember;
-import com.fivexbread.config.JwtProperties;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fivexbread.domain.auth.InvalidTokenException.Reason;
 import com.fivexbread.config.ClockConfig;
+import com.fivexbread.domain.auth.InvalidTokenException.Reason;
 import com.fivexbread.domain.member.model.enums.Role;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;

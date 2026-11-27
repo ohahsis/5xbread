@@ -1,6 +1,5 @@
 package com.fivexbread.common.outbox;
 
-import com.fivexbread.config.OutboxProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.Counter;

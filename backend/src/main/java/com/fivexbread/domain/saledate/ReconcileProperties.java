@@ -1,4 +1,4 @@
-package com.fivexbread.config;
+package com.fivexbread.domain.saledate;
 
 import jakarta.validation.constraints.NotNull;
 import java.time.Duration;

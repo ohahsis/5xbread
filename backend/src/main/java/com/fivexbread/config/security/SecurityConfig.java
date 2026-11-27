@@ -1,4 +1,4 @@
-package com.fivexbread.config;
+package com.fivexbread.config.security;
 
 import com.fivexbread.domain.auth.BoundedPasswordEncoder;
 import com.fivexbread.domain.auth.JwtAuthenticationFilter;

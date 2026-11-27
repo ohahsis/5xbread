@@ -1,4 +1,4 @@
-package com.fivexbread.config;
+package com.fivexbread.domain.reservation;
 
 import com.fivexbread.domain.reservation.model.enums.ReservationMode;
 import jakarta.validation.constraints.NotNull;

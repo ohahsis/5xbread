@@ -1,19 +1,18 @@
 package com.fivexbread.domain.reservation;
 
-import com.fivexbread.domain.reservation.model.vo.ReservationPlan;
-import com.fivexbread.config.ReservationProperties;
-import com.fivexbread.inbound.controller.reservation.model.request.ReservationCreateRequest;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
 import com.fivexbread.domain.member.model.Member;
-import com.fivexbread.domain.member.repository.MemberRepository;
 import com.fivexbread.domain.member.model.enums.MemberStatus;
-import com.fivexbread.domain.saledate.repository.DailyStockRepository;
+import com.fivexbread.domain.member.repository.MemberRepository;
+import com.fivexbread.domain.reservation.model.vo.ReservationPlan;
 import com.fivexbread.domain.saledate.model.PickupSlot;
-import com.fivexbread.domain.saledate.repository.PickupSlotRepository;
-import com.fivexbread.domain.saledate.model.vo.SaleBreadRow;
 import com.fivexbread.domain.saledate.model.SaleDate;
+import com.fivexbread.domain.saledate.model.vo.SaleBreadRow;
+import com.fivexbread.domain.saledate.repository.DailyStockRepository;
+import com.fivexbread.domain.saledate.repository.PickupSlotRepository;
 import com.fivexbread.domain.saledate.repository.SaleDateRepository;
+import com.fivexbread.inbound.controller.reservation.model.request.ReservationCreateRequest;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;

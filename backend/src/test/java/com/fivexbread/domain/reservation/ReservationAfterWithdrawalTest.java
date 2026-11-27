@@ -2,7 +2,6 @@ package com.fivexbread.domain.reservation;
 
 import com.fivexbread.domain.reservation.model.enums.ReservationMode;
 import com.fivexbread.domain.reservation.model.vo.ReservationPlan;
-import com.fivexbread.config.ReservationProperties;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -11,9 +10,9 @@ import static org.mockito.Mockito.doReturn;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fivexbread.domain.auth.JwtProvider;
-import com.fivexbread.domain.member.model.enums.Role;
 import com.fivexbread.domain.member.WithdrawalService;
 import com.fivexbread.domain.member.WithdrawnPhoneHasher;
+import com.fivexbread.domain.member.model.enums.Role;
 import com.fivexbread.domain.saledate.SaleDateTestData;
 import com.fivexbread.domain.saledate.StockKeys;
 import com.fivexbread.support.IntegrationTestSupport;

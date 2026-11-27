@@ -1,4 +1,4 @@
-package com.fivexbread.config;
+package com.fivexbread.common.outbox;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;

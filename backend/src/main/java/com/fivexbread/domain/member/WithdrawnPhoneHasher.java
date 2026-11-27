@@ -1,6 +1,5 @@
 package com.fivexbread.domain.member;
 
-import com.fivexbread.config.WithdrawalProperties;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.HexFormat;
