@@ -1,6 +1,5 @@
 package com.fivexbread.domain.auth;
 
-import com.fivexbread.config.security.JwtProperties;
 import com.fivexbread.domain.auth.InvalidTokenException.Reason;
 import com.fivexbread.domain.auth.model.vo.AuthMember;
 import com.fivexbread.domain.member.model.enums.Role;

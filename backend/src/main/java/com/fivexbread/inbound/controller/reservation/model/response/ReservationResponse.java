@@ -3,7 +3,7 @@ package com.fivexbread.inbound.controller.reservation.model.response;
 import com.fivexbread.domain.reservation.model.Reservation;
 import com.fivexbread.domain.reservation.model.enums.ReservationStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
-import static com.fivexbread.config.ClockConfig.KST;
+import static com.fivexbread.common.Times.KST;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;

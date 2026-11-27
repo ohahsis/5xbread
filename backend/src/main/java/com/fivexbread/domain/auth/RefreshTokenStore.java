@@ -2,7 +2,6 @@ package com.fivexbread.domain.auth;
 
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
-import com.fivexbread.config.security.JwtProperties;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;

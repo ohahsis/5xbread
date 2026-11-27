@@ -1,9 +1,9 @@
 package com.fivexbread.domain.reservation;
 
+import com.fivexbread.common.Times;
 import com.fivexbread.domain.reservation.model.Reservation;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fivexbread.config.ClockConfig;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -29,6 +29,6 @@ class ReservationCancelableTest {
     }
 
     private static LocalDateTime now(LocalDateTime at) {
-        return LocalDateTime.now(Clock.fixed(at.atZone(ClockConfig.KST).toInstant(), ClockConfig.KST));
+        return LocalDateTime.now(Clock.fixed(at.atZone(Times.KST).toInstant(), Times.KST));
     }
 }

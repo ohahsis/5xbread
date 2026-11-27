@@ -2,7 +2,6 @@ package com.fivexbread.domain.auth;
 
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
-import com.fivexbread.config.security.JwtProperties;
 import com.fivexbread.domain.auth.RefreshTokenStore.RotatedToken;
 import com.fivexbread.domain.auth.model.vo.IssuedTokens;
 import com.fivexbread.domain.member.MemberService;

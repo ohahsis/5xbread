@@ -1,4 +1,4 @@
-package com.fivexbread.config.security;
+package com.fivexbread.domain.auth;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

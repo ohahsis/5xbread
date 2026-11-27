@@ -1,6 +1,5 @@
 package com.fivexbread.common;
 
-import com.fivexbread.config.ClockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fivexbread.domain.admin.model.enums.AdminAction;
@@ -49,7 +48,7 @@ class TimeZoneGuardTest extends IntegrationTestSupport {
     @Test
     void JVM_기본_시간대와_주입한_Clock은_KST() {
         assertThat(TimeZone.getDefault().getID()).isEqualTo("Asia/Seoul");
-        assertThat(clock.getZone()).isEqualTo(ClockConfig.KST);
+        assertThat(clock.getZone()).isEqualTo(Times.KST);
     }
 
     @Test

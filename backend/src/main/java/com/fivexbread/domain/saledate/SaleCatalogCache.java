@@ -1,6 +1,5 @@
 package com.fivexbread.domain.saledate;
 
-import com.fivexbread.config.redis.CatalogCacheProperties;
 import com.fivexbread.domain.saledate.model.SaleDate;
 import com.fivexbread.domain.saledate.model.vo.SaleBreadRow;
 import com.fivexbread.domain.saledate.model.vo.SaleDateSchedule;

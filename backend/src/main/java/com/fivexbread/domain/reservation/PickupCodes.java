@@ -1,6 +1,6 @@
 package com.fivexbread.domain.reservation;
 
-import static com.fivexbread.config.ClockConfig.KST;
+import static com.fivexbread.common.Times.KST;
 
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;

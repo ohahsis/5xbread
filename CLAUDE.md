@@ -31,13 +31,19 @@ Spring Security + JWT, STOMP WebSocket, Testcontainers
   - 불변 값(record)·쿼리 프로젝션·커서 → `domain.{도메인}.model.vo`
   - Repository → `domain.{도메인}.repository`
   - 업무 설정값 `*Properties`(한도·기간·비밀값 등) → 그 값을 쓰는 `domain.{도메인}` 바로 아래 (아웃박스는 `common.outbox`)
-  - 인프라 `@Configuration`과 그 설정값 → `config.{기술}`(`security`, `websocket`, `redis`, `scheduling`, `openapi`). 기술 하나에 묶이지 않는 것(`ClockConfig`)만 `config` 루트
+  - 인프라 `@Configuration`과 그 설정값 → `config.{기술}`(`security`, `websocket`, `redis`, `scheduling`, `openapi`). 기술 하나에 묶이지 않는 것(`ClockConfig`)만 `config` 루트. 단 `domain`이 읽는 설정값은 그 도메인에 둔다(예: `JwtProperties` → `domain.auth`)
+  - 시간대 상수 → `common.Times`
   - 도메인과 무관한 공통 코드 → `common` (아웃박스는 `common.outbox`)
   - STOMP·실시간 발행 → `realtime`
   - 스케줄 작업 → `batch`
   - 테스트 → `src/test`의 대상과 같은 도메인 패키지(`domain.{도메인}`, 컨트롤러 테스트 포함), 공용 도구는 `support`
 - 계층: Controller(형식 검증·DTO) → Facade(Redis·DB 순서·보상) → Service(@Transactional) → Domain(업무 규칙) → Repository
 - 트랜잭션 안에서 Redis·외부 호출 금지
+- 의존 규칙 (`ArchitectureTest`, ArchUnit이 검사):
+  1. `domain..`은 `inbound..`과 `config..`을 import하지 않는다
+  2. `config..`은 `inbound..`을 import하지 않는다
+  3. `@Transactional`이 붙은 클래스(클래스나 메서드에)는 `org.springframework.data.redis..`에 의존하지 않는다
+- 지금 있는 위반은 `backend/archunit_store` 허용 목록에 있다. **허용 목록은 줄이기만 한다.** 위반을 고치면 테스트가 목록을 줄여 다시 쓰므로 그 변경을 함께 커밋하고, 새 위반을 목록에 넣지 않는다
 
 ## 규칙
 - 시간: DB DATETIME(KST) / 엔티티 LocalDateTime / API OffsetDateTime(+09:00)

@@ -1,11 +1,10 @@
 package com.fivexbread.domain.auth;
 
-import com.fivexbread.config.security.JwtProperties;
+import com.fivexbread.common.Times;
 import com.fivexbread.domain.auth.model.vo.AuthMember;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fivexbread.config.ClockConfig;
 import com.fivexbread.domain.auth.InvalidTokenException.Reason;
 import com.fivexbread.domain.member.model.enums.Role;
 import io.jsonwebtoken.Jwts;
@@ -57,7 +56,7 @@ class JwtProviderTest {
     void 다른_키로_서명한_토큰은_INVALID_SIGNATURE() {
         String forged = new JwtProvider(
                 new JwtProperties("attacker-secret-0123456789abcdef0123456789", Duration.ofMinutes(30), Duration.ofDays(14)),
-                Clock.fixed(NOW, ClockConfig.KST)).issue(1L, Role.ADMIN, false);
+                Clock.fixed(NOW, Times.KST)).issue(1L, Role.ADMIN, false);
 
         assertReason(provider, forged, Reason.INVALID_SIGNATURE);
     }
@@ -107,12 +106,12 @@ class JwtProviderTest {
     @Test
     void 비밀키가_32바이트보다_짧으면_만들_수_없다() {
         assertThatThrownBy(() -> new JwtProvider(new JwtProperties("short-secret", Duration.ofMinutes(30), Duration.ofDays(14)),
-                Clock.fixed(NOW, ClockConfig.KST)))
+                Clock.fixed(NOW, Times.KST)))
                 .isInstanceOf(WeakKeyException.class);
     }
 
     private static JwtProvider providerAt(Instant instant) {
-        return new JwtProvider(PROPERTIES, Clock.fixed(instant, ClockConfig.KST));
+        return new JwtProvider(PROPERTIES, Clock.fixed(instant, Times.KST));
     }
 
     private static SecretKey key(String secret) {

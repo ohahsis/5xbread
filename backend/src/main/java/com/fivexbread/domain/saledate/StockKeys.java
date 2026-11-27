@@ -1,6 +1,6 @@
 package com.fivexbread.domain.saledate;
 
-import static com.fivexbread.config.ClockConfig.KST;
+import static com.fivexbread.common.Times.KST;
 
 import java.time.Duration;
 import java.time.LocalDate;
