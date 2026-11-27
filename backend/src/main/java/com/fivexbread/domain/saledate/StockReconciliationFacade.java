@@ -3,7 +3,7 @@ package com.fivexbread.domain.saledate;
 import com.fivexbread.domain.saledate.model.SaleDate;
 import com.fivexbread.domain.saledate.repository.SaleDateRepository;
 import com.fivexbread.inbound.controller.saledate.model.response.StockReconciliationResponse;
-import static com.fivexbread.config.ClockConfig.KST;
+import static com.fivexbread.common.Times.KST;
 
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;

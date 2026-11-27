@@ -1,6 +1,6 @@
 package com.fivexbread.support;
 
-import com.fivexbread.config.ClockConfig;
+import com.fivexbread.common.Times;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -12,11 +12,11 @@ import java.time.ZoneId;
  */
 public class MutableClock extends Clock {
 
-    private final Clock system = Clock.system(ClockConfig.KST);
+    private final Clock system = Clock.system(Times.KST);
     private volatile Instant fixed;
 
     public void set(LocalDateTime now) {
-        this.fixed = now.atZone(ClockConfig.KST).toInstant();
+        this.fixed = now.atZone(Times.KST).toInstant();
     }
 
     public void reset() {
@@ -25,7 +25,7 @@ public class MutableClock extends Clock {
 
     @Override
     public ZoneId getZone() {
-        return ClockConfig.KST;
+        return Times.KST;
     }
 
     @Override

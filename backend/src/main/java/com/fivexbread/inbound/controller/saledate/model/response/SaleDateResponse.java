@@ -2,7 +2,7 @@ package com.fivexbread.inbound.controller.saledate.model.response;
 
 import com.fivexbread.domain.saledate.model.PickupSlot;
 import com.fivexbread.domain.saledate.model.SaleDate;
-import static com.fivexbread.config.ClockConfig.KST;
+import static com.fivexbread.common.Times.KST;
 
 import java.time.LocalDate;
 import java.time.LocalTime;

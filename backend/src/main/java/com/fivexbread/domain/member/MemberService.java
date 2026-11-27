@@ -2,7 +2,7 @@ package com.fivexbread.domain.member;
 
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
-import com.fivexbread.config.ClockConfig;
+import com.fivexbread.common.Times;
 import com.fivexbread.domain.member.model.Member;
 import com.fivexbread.domain.member.model.MemberAgreement;
 import com.fivexbread.domain.member.model.enums.MemberStatus;
@@ -59,7 +59,7 @@ public class MemberService {
         LocalDateTime availableAt = withdrawnAt.plus(withdrawalProperties.rejoinAfter());
         if (LocalDateTime.now(clock).isBefore(availableAt)) {
             throw new BusinessException(ErrorCode.REJOIN_RESTRICTED, null,
-                    Map.of("rejoinAvailableAt", availableAt.atZone(ClockConfig.KST).toOffsetDateTime()));
+                    Map.of("rejoinAvailableAt", availableAt.atZone(Times.KST).toOffsetDateTime()));
         }
     }
 

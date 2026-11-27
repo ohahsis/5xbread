@@ -1,5 +1,6 @@
 package com.fivexbread.domain.saledate;
 
+import com.fivexbread.common.Times;
 import com.fivexbread.domain.saledate.model.enums.SaleBreadStatus;
 import com.fivexbread.domain.saledate.model.enums.SaleDateStatus;
 import com.fivexbread.domain.saledate.model.vo.SaleBreadRow;
@@ -16,9 +17,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fivexbread.common.BusinessException;
-import com.fivexbread.config.ClockConfig;
-import com.fivexbread.inbound.controller.saledate.model.response.SaleBreadsResponse.SaleBreadResponse;
 import com.fivexbread.domain.saledate.StockReader.Snapshot;
+import com.fivexbread.inbound.controller.saledate.model.response.SaleBreadsResponse.SaleBreadResponse;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -45,7 +45,7 @@ class SaleBreadsFacadeTest {
     private final StockRedisSync redisSync = mock(StockRedisSync.class);
     private final SaleDateQueryService query = mock(SaleDateQueryService.class);
     private final SaleBreadsFacade facade = new SaleBreadsFacade(cache, reader, redisSync, query,
-            Clock.fixed(NOW.atZone(ClockConfig.KST).toInstant(), ClockConfig.KST));
+            Clock.fixed(NOW.atZone(Times.KST).toInstant(), Times.KST));
 
     @BeforeEach
     void setUp() {

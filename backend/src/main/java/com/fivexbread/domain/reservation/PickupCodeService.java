@@ -4,7 +4,7 @@ import com.fivexbread.domain.reservation.model.Reservation;
 import com.fivexbread.domain.reservation.repository.ReservationRepository;
 import com.fivexbread.inbound.controller.reservation.model.response.AdminReservationResponse;
 import com.fivexbread.inbound.controller.reservation.model.response.PickupCodeResponse;
-import static com.fivexbread.config.ClockConfig.KST;
+import static com.fivexbread.common.Times.KST;
 
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;

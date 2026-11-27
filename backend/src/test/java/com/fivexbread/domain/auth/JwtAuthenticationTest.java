@@ -1,6 +1,6 @@
 package com.fivexbread.domain.auth;
 
-import com.fivexbread.config.security.JwtProperties;
+import com.fivexbread.common.Times;
 import com.fivexbread.config.security.SecurityConfig;
 import com.fivexbread.domain.auth.model.vo.AuthMember;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -10,7 +10,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fivexbread.common.ApiExceptionHandler;
-import com.fivexbread.config.ClockConfig;
 import com.fivexbread.domain.member.model.enums.Role;
 import java.time.Clock;
 import java.time.Duration;
@@ -136,7 +135,7 @@ class JwtAuthenticationTest {
 
     private String issuedMinutesAgo(long minutes) {
         Instant issuedAt = clock.instant().minus(Duration.ofMinutes(minutes));
-        return new JwtProvider(jwtProperties, Clock.fixed(issuedAt, ClockConfig.KST)).issue(7L, Role.CUSTOMER, false);
+        return new JwtProvider(jwtProperties, Clock.fixed(issuedAt, Times.KST)).issue(7L, Role.CUSTOMER, false);
     }
 
     private ResultActions withBearer(String token, String uri) throws Exception {

@@ -63,10 +63,12 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:mysql")
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.5.1")   // 패키지 의존 규칙 (ArchitectureTest, decisions.md 2장 "패키지 구조")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.withType<Test> {
     useJUnitPlatform()
     systemProperty("user.timezone", "Asia/Seoul")   // CI(UTC)와 로컬(KST)의 차이 제거 (decisions.md 3장)
+    inputs.dir("archunit_store")   // 허용 목록만 바뀌어도 테스트를 다시 돌린다
 }

@@ -9,7 +9,7 @@ import com.fivexbread.domain.saledate.repository.PickupSlotRepository;
 import com.fivexbread.domain.saledate.repository.SaleDateRepository;
 import com.fivexbread.inbound.controller.saledate.model.request.SaleDateRequest;
 import com.fivexbread.inbound.controller.saledate.model.response.SaleDateResponse;
-import static com.fivexbread.config.ClockConfig.KST;
+import static com.fivexbread.common.Times.KST;
 
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
