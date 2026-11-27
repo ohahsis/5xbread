@@ -31,6 +31,6 @@ public class AdminStockReconciliationController {
     public ResponseEntity<StockReconciliationResponse> create(
             @AuthenticationPrincipal AuthMember admin,
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(reconciliationFacade.reconcile(date, admin.memberId()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(StockReconciliationResponse.from(reconciliationFacade.reconcile(date, admin.memberId())));
     }
 }

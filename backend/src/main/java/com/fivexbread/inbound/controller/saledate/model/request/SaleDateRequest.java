@@ -1,6 +1,10 @@
 package com.fivexbread.inbound.controller.saledate.model.request;
 
+import com.fivexbread.domain.saledate.model.vo.SaleDateCommand;
+import static com.fivexbread.common.Times.KST;
+
 import jakarta.validation.constraints.NotNull;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -17,4 +21,12 @@ public record SaleDateRequest(
         @NotNull Boolean holiday,
         @NotNull List<@NotNull LocalTime> pickupTimes
 ) {
+
+    public SaleDateCommand toCommand() {
+        return new SaleDateCommand(toKst(openAt), toKst(closeAt), holiday, pickupTimes);
+    }
+
+    private static LocalDateTime toKst(OffsetDateTime time) {
+        return time.atZoneSameInstant(KST).toLocalDateTime();
+    }
 }

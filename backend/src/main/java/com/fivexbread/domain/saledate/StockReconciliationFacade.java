@@ -1,9 +1,10 @@
 package com.fivexbread.domain.saledate;
 
 import com.fivexbread.domain.saledate.model.SaleDate;
+import com.fivexbread.domain.saledate.model.vo.StockReconciliationResult.Item;
+import com.fivexbread.domain.saledate.model.vo.StockReconciliationResult.Outcome;
+import com.fivexbread.domain.saledate.model.vo.StockReconciliationResult;
 import com.fivexbread.domain.saledate.repository.SaleDateRepository;
-import com.fivexbread.inbound.controller.saledate.model.response.StockReconciliationResponse;
-import static com.fivexbread.common.Times.KST;
 
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
@@ -11,8 +12,6 @@ import com.fivexbread.domain.admin.model.AdminActionLog;
 import com.fivexbread.domain.admin.model.enums.AdminAction;
 import com.fivexbread.domain.admin.repository.AdminActionLogRepository;
 import com.fivexbread.domain.saledate.StockReconciler.Observation;
-import com.fivexbread.inbound.controller.saledate.model.response.StockReconciliationResponse.Item;
-import com.fivexbread.inbound.controller.saledate.model.response.StockReconciliationResponse.Result;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -48,7 +47,7 @@ public class StockReconciliationFacade {
     private final StockAdjustmentMetrics adjustmentMetrics;
     private final Clock clock;
 
-    public StockReconciliationResponse reconcile(LocalDate date, long adminId) {
+    public StockReconciliationResult reconcile(LocalDate date, long adminId) {
         SaleDate saleDate = saleDateRepository.findById(date).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         if (saleDate.isHoliday()) {
             throw new BusinessException(ErrorCode.SALE_DATE_HOLIDAY);
@@ -77,7 +76,7 @@ public class StockReconciliationFacade {
         LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MILLIS);    // 기록(DATETIME(3))과 같게
         AdminActionLog record = adminActionLogRepository.save(AdminActionLog.onSaleDate(adminId,
                 AdminAction.STOCK_RECONCILED, date, Map.of("breads", items), now));
-        return new StockReconciliationResponse(record.getId(), date, now.atZone(KST).toOffsetDateTime(), items);
+        return new StockReconciliationResult(record.getId(), date, now, items);
     }
 
     private Item judge(LocalDate date, Observation first, Observation second, boolean reservable,
@@ -85,26 +84,26 @@ public class StockReconciliationFacade {
         long breadId = second.breadId();
         if (second.redis() == null) {
             if (!reservable) {
-                return new Item(breadId, null, second.db(), 0, Result.NO_KEY);
+                return new Item(breadId, null, second.db(), 0, Outcome.NO_KEY);
             }
             toLoad.put(breadId, second.db());
-            return new Item(breadId, null, second.db(), 0, Result.LOADED);
+            return new Item(breadId, null, second.db(), 0, Outcome.LOADED);
         }
         int delta = second.delta();
         if (delta == 0) {
-            return new Item(breadId, second.redis(), second.db(), 0, Result.MATCHED);
+            return new Item(breadId, second.redis(), second.db(), 0, Outcome.MATCHED);
         }
         if (first == null || first.delta() == null || first.delta() != delta) {
-            return new Item(breadId, second.redis(), second.db(), 0, Result.CHANGING);
+            return new Item(breadId, second.redis(), second.db(), 0, Outcome.CHANGING);
         }
         Long after = stockRedisSync.adjust(date, breadId, delta);
         if (after == null) {                                          // 관측 뒤 키가 사라짐(만료·재시작)
-            return new Item(breadId, null, second.db(), 0, Result.NO_KEY);
+            return new Item(breadId, null, second.db(), 0, Outcome.NO_KEY);
         }
         adjustmentMetrics.record(StockAdjustmentMetrics.MANUAL, delta);
         log.warn("수량 재계산: Redis 잔여 보정 saleDate={} breadId={} redis={} db={} adjustment={} after={}",
                 date, breadId, second.redis(), second.db(), delta, after);
-        return new Item(breadId, second.redis(), second.db(), delta, Result.ADJUSTED);
+        return new Item(breadId, second.redis(), second.db(), delta, Outcome.ADJUSTED);
     }
 
     private void sleep() {

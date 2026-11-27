@@ -1,6 +1,6 @@
 package com.fivexbread.domain.saledate;
 
-import com.fivexbread.inbound.controller.saledate.model.request.StockRowRequest;
+import com.fivexbread.domain.saledate.model.vo.StockRowCommand;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -140,8 +140,8 @@ class StockOutboxTest extends IntegrationTestSupport {
         assertThat(redis.opsForValue().get(StockKeys.stock(date, 2))).isEqualTo("40");    // 먼저 줄인 5 를 보상
     }
 
-    private static StockRowRequest row(long breadId, int reservable) {
-        return new StockRowRequest(breadId, 100, reservable, null);
+    private static StockRowCommand row(long breadId, int reservable) {
+        return new StockRowCommand(breadId, 100, reservable, null);
     }
 
     private int reservable(long breadId) {

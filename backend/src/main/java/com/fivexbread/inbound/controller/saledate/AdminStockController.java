@@ -1,11 +1,11 @@
 package com.fivexbread.inbound.controller.saledate;
 
-import com.fivexbread.domain.saledate.StockFacade;
-import com.fivexbread.inbound.controller.saledate.model.request.StockRowRequest;
-import com.fivexbread.domain.saledate.StockService;
-import com.fivexbread.inbound.controller.saledate.model.response.StocksResponse;
 import com.fivexbread.common.BusinessException;
 import com.fivexbread.common.ErrorCode;
+import com.fivexbread.domain.saledate.StockFacade;
+import com.fivexbread.domain.saledate.StockService;
+import com.fivexbread.inbound.controller.saledate.model.request.StockRowRequest;
+import com.fivexbread.inbound.controller.saledate.model.response.StocksResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
@@ -42,7 +42,7 @@ public class AdminStockController {
     @GetMapping
     public ResponseEntity<StocksResponse> get(@PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         StockService.Result result = stockService.get(date);
-        return ResponseEntity.ok().eTag(result.eTag()).body(result.stocks());
+        return ResponseEntity.ok().eTag(result.eTag()).body(StocksResponse.from(result.stocks()));
     }
 
     @PutMapping
@@ -50,8 +50,8 @@ public class AdminStockController {
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) String ifMatch,
             @RequestBody @NotEmpty @Size(max = 100) List<@Valid StockRowRequest> rows) {
-        StockService.Result result = stockFacade.put(date, expectedVersion(ifMatch), rows);
-        return ResponseEntity.ok().eTag(result.eTag()).body(result.stocks());
+        StockService.Result result = stockFacade.put(date, expectedVersion(ifMatch), rows.stream().map(StockRowRequest::toCommand).toList());
+        return ResponseEntity.ok().eTag(result.eTag()).body(StocksResponse.from(result.stocks()));
     }
 
     private static int expectedVersion(String ifMatch) {
